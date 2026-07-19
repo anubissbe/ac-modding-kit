@@ -2679,7 +2679,11 @@ def run_self_tests() -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    program = Path(sys.argv[0]).name
+    if program.lower().endswith(".exe"):
+        program = program[:-4]
     parser = argparse.ArgumentParser(
+        prog=program,
         description="Read-only discovery plus safe, dry-run-first Ancient Cities mod tooling.",
     )
     parser.add_argument("--json", action="store_true", help="emit compact machine-readable JSON")
