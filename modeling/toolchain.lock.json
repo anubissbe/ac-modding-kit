@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "blender": {
+    "version": "5.2.0",
+    "release_line": "LTS",
+    "platform": "windows-x64",
+    "distribution": "portable-zip",
+    "archive": "blender-5.2.0-windows-x64.zip",
+    "url": "https://download.blender.org/release/Blender5.2/blender-5.2.0-windows-x64.zip",
+    "sha256": "2d184b626c001692c362291911293b6a297179d618d95e9e9192c3a80318adc4"
+  }
+}

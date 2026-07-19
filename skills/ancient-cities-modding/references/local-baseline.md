@@ -46,5 +46,8 @@ or other machine telemetry in compatibility reports without consent.
 Configuration, localization, balance, and many texture tasks need only the bundled
 Python tool plus suitable user-authored assets. Creation or reliable revision of
 original FBX models/animations requires Blender or an equivalent FBX authoring tool;
-discover that capability live rather than assuming it is installed. A Codex skill
-does not replace a 3D authoring tool.
+discover that capability live rather than assuming it is installed. During this audit,
+the official portable Blender `5.2.0 LTS` Windows x64 archive was installed and verified
+against SHA-256 `2d184b626c001692c362291911293b6a297179d618d95e9e9192c3a80318adc4`.
+Its executable location is environment-specific and must still be discovered. A Codex
+skill does not replace a 3D authoring tool.

@@ -27,6 +27,13 @@ venv/
 Thumbs.db
 .DS_Store
 
+# Blender local state and recoverable backups
+*.blend[0-9]*
+*.blend@
+modeling/.cache/
+modeling/.staging/
+modeling/build/
+
 # Local reports and scratch output
 artifacts/
 coverage.xml

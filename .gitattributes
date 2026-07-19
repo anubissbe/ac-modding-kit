@@ -5,13 +5,20 @@
 *.ps1 text eol=lf
 
 *.7z binary
+*.blend binary
 *.dll binary
 *.exe binary
+*.fbx binary
+*.FBX binary
 *.gif binary
 *.ico binary
 *.jpg binary
 *.jpeg binary
 *.png binary
+*.dds binary
+*.DDS binary
+*.tga binary
+*.TGA binary
 *.sav binary
 *.save binary
 *.zip binary

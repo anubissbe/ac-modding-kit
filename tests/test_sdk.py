@@ -701,6 +701,25 @@ class ImportAndProjectTests(SyntheticTempTestCase):
 
 
 class CliContractTests(unittest.TestCase):
+    def test_default_success_output_is_unwrapped_pretty_json(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            exit_code = cli_main(["sdk-info"])
+        payload = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("schema_version", payload)
+        self.assertNotIn("issues", payload)
+        self.assertFalse(payload["publishes_workshop_items"])
+
+    def test_default_error_output_is_unwrapped_pretty_json(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            exit_code = cli_main(["knowledge", "read", "definitely-not-a-topic"])
+        issue = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 1)
+        self.assertNotIn("schema_version", issue)
+        self.assertEqual(issue["code"], "KNOWLEDGE_TOPIC_UNKNOWN")
+
     def test_sdk_info_uses_versioned_json_envelope(self) -> None:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
@@ -711,6 +730,16 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(payload["command"], "sdk-info")
         self.assertEqual(payload["issues"], [])
         self.assertFalse(payload["data"]["publishes_workshop_items"])
+
+    def test_json_error_uses_versioned_envelope(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            exit_code = cli_main(["--json", "knowledge", "read", "definitely-not-a-topic"])
+        payload = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(payload["schema_version"], "1")
+        self.assertEqual(payload["command"], "knowledge.read")
+        self.assertEqual(payload["issues"][0]["code"], "KNOWLEDGE_TOPIC_UNKNOWN")
 
     def test_python_api_errors_have_stable_serialization(self) -> None:
         error = ContractError("synthetic", code="SYNTHETIC_ERROR", path="fixture")

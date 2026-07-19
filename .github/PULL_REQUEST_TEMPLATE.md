@@ -7,6 +7,7 @@ Describe the problem and the smallest change that solves it. Link related issues
 
 - [ ] Bug fix
 - [ ] New feature or validator
+- [ ] Original model or other asset
 - [ ] Documentation or community maintenance
 - [ ] Compatibility update
 - [ ] Breaking change
@@ -19,6 +20,8 @@ Describe the problem and the smallest change that solves it. Link related issues
 - [ ] I tested on Windows and/or Linux, or explained why this is not applicable.
 - [ ] Any in-game claim identifies the exact Ancient Cities build and test date.
 - [ ] Any in-game test used a disposable save after a clean game launch.
+- [ ] Model changes update provenance, preview, semantic report, checksums, and Blender-side
+      validation, or this is not applicable.
 
 Commands run and relevant results:
 
@@ -36,6 +39,8 @@ Commands run and relevant results:
 - [ ] Save and achievement risks are documented when this change can affect them.
 - [ ] Logs and examples are synthetic or sanitized and contain no credentials or
       personal information.
+- [ ] Binary assets contain no private authoring paths and use ordinary Git unless the
+      repository explicitly adopts Git LFS for them.
 
 ## Screenshots or notes
 

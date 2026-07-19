@@ -1,0 +1,93 @@
+{
+  "ai_assistance": "Generator design and documentation were AI-assisted; geometry is original",
+  "asset_id": "starter_plant",
+  "authoring_example": true,
+  "blender": {
+    "build_hash": "fbe6228777e7",
+    "version": "5.2.0 LTS"
+  },
+  "category": "plant",
+  "contains_game_or_workshop_assets": false,
+  "creation_method": "Procedurally generated from original primitive geometry",
+  "exports": [
+    "exports/Mesh.fbx"
+  ],
+  "fbx": {
+    "axis_forward": "-Z",
+    "axis_up": "Y",
+    "binary": true,
+    "embedded_textures": false,
+    "triangulated": true
+  },
+  "license": "MIT",
+  "limitations": [
+    "This is an authoring example, not a complete Ancient Cities mod.",
+    "The running v1.9.3 game and Log.txt remain the final compatibility test."
+  ],
+  "objects": [
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          0.34,
+          0.300534,
+          0.717
+        ],
+        "min": [
+          -0.28,
+          -0.24347,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "LOD0",
+      "transform_identity": true,
+      "triangles": 44,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 54
+    },
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          0.18,
+          0.18,
+          0.65
+        ],
+        "min": [
+          -0.18,
+          -0.18,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "LOD1",
+      "transform_identity": true,
+      "triangles": 8,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 12
+    }
+  ],
+  "rgba_mode": "WindNone",
+  "runtime_tested": false,
+  "scene": {
+    "scale_length": 1.0,
+    "source_up_axis": "Z",
+    "unit_system": "METRIC"
+  },
+  "schema_version": 1,
+  "textures": [
+    "textures/C.tga",
+    "textures/N.tga",
+    "textures/T.tga",
+    "textures/O.tga"
+  ]
+}

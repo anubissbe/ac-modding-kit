@@ -1,0 +1,48 @@
+schema_version = 1
+id = "starter_resource"
+display_name = "Starter Resource"
+category = "resource"
+status = "authoring-example"
+license = "MIT"
+author = "Bert Colemont (@anubissbe)"
+contact = "https://github.com/anubissbe/ac-modding-kit/issues"
+creation_method = "Original procedural geometry authored for this repository with Blender"
+ai_assisted = true
+contains_game_assets = false
+contains_workshop_assets = false
+runtime_tested = false
+
+[toolchain]
+blender_version = "5.2.0"
+lock_file = "../../../toolchain.lock.json"
+
+[compatibility]
+steam_app_id = 667610
+game_semver = "1.9.3"
+steam_build_id = 23915225
+internal_game_version = "22"
+claim = "authoring-only"
+
+[outputs]
+source_glob = "source/*.blend"
+export_glob = "exports/*.fbx"
+textures = [
+  "textures/C.tga",
+  "textures/N.tga",
+  "textures/T.tga",
+  "textures/O.tga",
+]
+preview = "preview.png"
+report = "report.json"
+checksums = "checksums.sha256"
+
+[model_contract]
+units = "metres"
+fbx_encoding = "binary"
+source_up_axis = "Z"
+fbx_up_axis = "Y"
+required_roles = ["resource", "heap", "pile", "load"]
+mode_rgba = "ColorVSplit"
+split_alpha_range_u8 = [254, 0]
+load_demo_alpha_u8 = [254, 127, 0]
+notes = "Each disconnected element has one uniform alpha; multi-item roles span 254 to 0."
