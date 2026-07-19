@@ -22,8 +22,9 @@ repository's MIT License.
 py -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
-python -m ruff format --check skills/ancient-cities-modding/scripts tests
-python -m ruff check skills/ancient-cities-modding/scripts tests
+python -m ruff format --check src schemas skills/ancient-cities-modding/scripts tests examples
+python -m ruff check src schemas skills/ancient-cities-modding/scripts tests examples
+python -m mypy --strict src/acmk
 python -m pytest
 ```
 
@@ -62,4 +63,5 @@ does not establish runtime compatibility.
 Maintainers review scope, provenance, tests, documentation, safety, and licensing.
 They may ask for a smaller change or additional current-build evidence. Approval does
 not transfer responsibility for third-party rights or in-game consequences. Releases
-follow [GOVERNANCE.md](GOVERNANCE.md) and use semantic versioning where practical.
+follow [GOVERNANCE.md](GOVERNANCE.md), the [release checklist](docs/releasing.md), and
+use semantic versioning where practical.

@@ -82,6 +82,17 @@ MANIFEST_REQUIRED_FIELDS = (
     "SteamModId",
     "Type",
 )
+MANIFEST_FIELD_KINDS: Mapping[str, str] = {
+    "Changelog": "String",
+    "Content": "String",
+    "Date": "String",
+    "Description": "String",
+    "GameVersion": "String",
+    "SteamModId": "U32x2",
+    "Title": "String",
+    "Type": "String",
+    "Version": "F32",
+}
 MUTABLE_METADATA_FIELDS: Mapping[str, str] = {
     "changelog": "Changelog",
     "content": "Content",
@@ -174,6 +185,11 @@ class ContentEntry:
 
 _BLOCK_HEADER_RE = re.compile(r"(?<![A-Za-z0-9_./-])(?P<kind>[A-Za-z_][A-Za-z0-9_./-]*)\s*:\s*\{")
 _ART_QUOTED = r'"((?:\\.|[^"\\])*)"'
+_ASCII_DECIMAL_RE = re.compile(r"[0-9]+\Z")
+
+
+def _is_ascii_decimal(value: str) -> bool:
+    return _ASCII_DECIMAL_RE.fullmatch(value) is not None
 
 
 def _art_unescape(value: str) -> str:
@@ -194,6 +210,43 @@ def _art_escape(value: str) -> str:
         .replace("\n", "\\n")
         .replace("\t", "\\t")
     )
+
+
+def _assert_balanced_art_for_mutation(text: str) -> None:
+    """Refuse edits when the limited ART scanner cannot identify safe spans."""
+
+    depth = 0
+    quoted = False
+    escaped = False
+    for index, char in enumerate(text):
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+            continue
+        if char == '"':
+            quoted = True
+        elif char == "{":
+            depth += 1
+            if depth > MAX_ART_NESTING:
+                raise ModToolError(
+                    f"ART nesting exceeds the hard {MAX_ART_NESTING}-level parse limit"
+                )
+        elif char == "}":
+            if depth == 0:
+                raise ModToolError(
+                    f"refusing metadata mutation: unmatched closing brace at character {index}"
+                )
+            depth -= 1
+    if quoted:
+        raise ModToolError("refusing metadata mutation: unterminated quoted string")
+    if depth:
+        raise ModToolError(
+            f"refusing metadata mutation: {depth} unclosed ART block" + ("s" if depth != 1 else "")
+        )
 
 
 def _body_properties(body: str, names: Iterable[str]) -> dict[str, str]:
@@ -375,6 +428,8 @@ def decode_utf16le_art(data: bytes, label: str = "ART/LOC file") -> str:
     if not data.startswith(UTF16LE_BOM):
         raise ModToolError(f"{label} is missing the UTF-16LE BOM")
     payload = data[len(UTF16LE_BOM) :]
+    if payload.startswith(UTF16LE_BOM):
+        raise ModToolError(f"{label} has more than one leading UTF-16LE BOM")
     if len(payload) % 2:
         raise ModToolError(f"{label} has an odd byte length")
     try:
@@ -391,6 +446,8 @@ def decode_utf16le_art(data: bytes, label: str = "ART/LOC file") -> str:
 
 
 def encode_utf16le_art(text: str) -> bytes:
+    if text.startswith("\ufeff"):
+        raise ModToolError("text already contains a leading BOM; exactly one BOM is required")
     try:
         return UTF16LE_BOM + text.encode("utf-16-le", errors="strict")
     except UnicodeEncodeError as exc:
@@ -398,7 +455,7 @@ def encode_utf16le_art(text: str) -> bytes:
 
 
 def normalise_steam_mod_id(value: str, *, allow_single: bool) -> str:
-    pattern = r"\d+(?:,\d+)?" if allow_single else r"\d+,\d+"
+    pattern = r"[0-9]+(?:,[0-9]+)?" if allow_single else r"[0-9]+,[0-9]+"
     clean = value.strip()
     if not re.fullmatch(pattern, clean):
         expected = "an unsigned integer or pair" if allow_single else "an unsigned integer pair"
@@ -645,7 +702,7 @@ def _discover_game_version(game_dir: Path) -> str | None:
     counts = Counter(versions)
 
     def numeric_rank(value: str) -> tuple[int, int, str]:
-        if not value.isdigit():
+        if not _is_ascii_decimal(value):
             return (0, 0, value)
         significant = value.lstrip("0") or "0"
         return (1, len(significant), significant)
@@ -794,14 +851,31 @@ def assert_writable_project_path(path: Path, ctx: DiscoveryContext) -> None:
             )
 
 
+def path_is_link_like(path: Path) -> bool:
+    """Detect symbolic links and Windows reparse points on Python 3.11+."""
+
+    if path.is_symlink():
+        return True
+    if os.name != "nt":
+        return False
+    try:
+        attributes = getattr(os.lstat(path), "st_file_attributes", 0)
+    except FileNotFoundError:
+        return False
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return bool(attributes & reparse_flag)
+
+
 def assert_no_symlink_components(path: Path) -> None:
     """Reject lexical symlinks before any resolve() can hide them."""
 
     lexical = Path(os.path.abspath(os.fspath(path.expanduser())))
     for component in (lexical, *lexical.parents):
         try:
-            if component.is_symlink():
-                raise ModToolError(f"refusing to write through symbolic link: {component}")
+            if path_is_link_like(component):
+                raise ModToolError(
+                    f"refusing to write through symbolic link or junction: {component}"
+                )
         except OSError as exc:
             raise ModToolError(f"cannot safely inspect path component {component}: {exc}") from exc
 
@@ -1113,6 +1187,35 @@ def _directory_content_root(target: Path) -> tuple[Path | None, str]:
     return None, "Ancient"
 
 
+def _bounded_tree_entries(root: Path, *, limit: int = MAX_ZIP_FILES) -> list[Path]:
+    """Enumerate a tree without following links or retaining more than ``limit`` entries."""
+
+    entries: list[Path] = []
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        child_directories: list[Path] = []
+        try:
+            with os.scandir(directory) as iterator:
+                for entry in iterator:
+                    path = Path(entry.path)
+                    entries.append(path)
+                    if len(entries) > limit:
+                        raise ModToolError(
+                            f"directory tree exceeds the hard {limit}-entry limit: {root}"
+                        )
+                    if path_is_link_like(path):
+                        continue
+                    if entry.is_dir(follow_symlinks=False):
+                        child_directories.append(path)
+        except ModToolError:
+            raise
+        except OSError as exc:
+            raise ModToolError(f"cannot enumerate directory tree {root}: {exc}") from exc
+        pending.extend(child_directories)
+    return sorted(entries, key=lambda item: (item.as_posix().casefold(), item.as_posix()))
+
+
 def content_entries(target: Path) -> list[ContentEntry]:
     """Enumerate Ancient/ payload files from a project, extracted mod, or Mod.zip."""
 
@@ -1146,9 +1249,11 @@ def content_entries(target: Path) -> list[ContentEntry]:
     root, actual_name = _directory_content_root(target)
     if root is None:
         return []
+    if path_is_link_like(root):
+        raise ModToolError(f"symbolic link payload root is forbidden: {root}")
     result: list[ContentEntry] = []
-    for path in sorted(root.rglob("*"), key=lambda item: item.as_posix().casefold()):
-        if not path.is_file() or path.is_symlink():
+    for path in _bounded_tree_entries(root):
+        if not path.is_file() or path_is_link_like(path):
             continue
         relative = path.relative_to(root).as_posix()
         logical = f"{actual_name}/{relative}"
@@ -1168,18 +1273,24 @@ def content_entries(target: Path) -> list[ContentEntry]:
     return result
 
 
+def _root_file_matches(root: Path, expected_name: str) -> list[Path]:
+    if not root.is_dir():
+        return []
+    try:
+        matches = [
+            child
+            for child in root.iterdir()
+            if child.is_file() and child.name.casefold() == expected_name.casefold()
+        ]
+    except OSError:
+        return []
+    return sorted(matches, key=lambda path: (path.name.casefold(), path.name))
+
+
 def _manifest_path_for_target(target: Path) -> Path | None:
     root = target.parent if target.is_file() else target
-    if not root.is_dir():
-        return None
-    try:
-        children = list(root.iterdir())
-    except OSError:
-        return None
-    return next(
-        (child for child in children if child.is_file() and child.name.casefold() == "index.art"),
-        None,
-    )
+    matches = _root_file_matches(root, "Index.art")
+    return matches[0] if len(matches) == 1 else None
 
 
 def _signature_problem(path: str, data: bytes) -> str | None:
@@ -1294,7 +1405,14 @@ def _hash_file(path: Path) -> str:
 
 def _normalise_reference(current_file: str, reference: str) -> str | None:
     clean = reference.strip().replace("\\", "/")
-    if not clean or "://" in clean or clean.startswith(("~", "#", "$")):
+    if (
+        not clean
+        or "://" in clean
+        or clean.startswith(("~", "#", "$", "../"))
+        or clean == ".."
+        or clean == "/System"
+        or clean.startswith("/System/")
+    ):
         return None
     if re.match(r"^[A-Za-z]:", clean):
         return clean
@@ -1437,9 +1555,21 @@ def validate_target(
         issues.append(Issue("error", "TARGET_MISSING", "target does not exist", str(target)))
         return _validation_result(target, issues, {}, [], {})
 
+    item_root = target.parent if target.is_file() else target
     manifest: dict[str, str] = {}
-    manifest_path = _manifest_path_for_target(target)
-    if manifest_path is None:
+    manifest_matches = _root_file_matches(item_root, "Index.art")
+    manifest_path = manifest_matches[0] if len(manifest_matches) == 1 else None
+    if len(manifest_matches) > 1:
+        issues.append(
+            Issue(
+                "error",
+                "MANIFEST_AMBIGUOUS",
+                "multiple case-insensitive variants of root Index.art were found",
+                str(item_root),
+                {"matches": [str(path) for path in manifest_matches]},
+            )
+        )
+    elif manifest_path is None:
         issues.append(Issue("error", "MANIFEST_MISSING", "root Index.art is required", str(target)))
     else:
         if manifest_path.name != "Index.art":
@@ -1494,7 +1624,7 @@ def validate_target(
                             str(manifest_path),
                         )
                     )
-            if manifest.get("GameVersion") and not manifest["GameVersion"].isdigit():
+            if manifest.get("GameVersion") and not _is_ascii_decimal(manifest["GameVersion"]):
                 issues.append(
                     Issue(
                         "error",
@@ -1530,7 +1660,7 @@ def validate_target(
                     )
                 )
             folder = manifest_path.parent.name
-            if folder.isdigit() and steam_id:
+            if _is_ascii_decimal(folder) and steam_id:
                 leading = steam_id.split(",", 1)[0]
                 if leading not in {"0", folder}:
                     issues.append(
@@ -1554,19 +1684,19 @@ def validate_target(
         except (OSError, ModToolError) as exc:
             issues.append(Issue("error", "ART_ENCODING", str(exc), str(manifest_path)))
 
-    item_root = target.parent if target.is_file() else target
-    try:
-        thumbnail_path = next(
-            (
-                child
-                for child in item_root.iterdir()
-                if child.is_file() and child.name.casefold() == "thumbnail.jpg"
-            ),
-            None,
+    thumbnail_matches = _root_file_matches(item_root, "Thumbnail.jpg")
+    thumbnail_path = thumbnail_matches[0] if len(thumbnail_matches) == 1 else None
+    if len(thumbnail_matches) > 1:
+        issues.append(
+            Issue(
+                "error",
+                "THUMBNAIL_AMBIGUOUS",
+                "multiple case-insensitive variants of root Thumbnail.jpg were found",
+                str(item_root),
+                {"matches": [str(path) for path in thumbnail_matches]},
+            )
         )
-    except OSError:
-        thumbnail_path = None
-    if thumbnail_path is None:
+    elif thumbnail_path is None:
         expected_thumbnail = item_root / "Thumbnail.jpg"
         issues.append(
             Issue(
@@ -1641,23 +1771,36 @@ def validate_target(
     else:
         root = target.parent if target.is_file() else target
         entries_target = root if (root / "Ancient").is_dir() else (archive or root)
-    try:
-        entries = content_entries(entries_target)
-    except (ModToolError, OSError, zipfile.BadZipFile, RuntimeError) as exc:
-        entries = []
-        issues.append(
-            Issue(
-                "error",
-                "CONTENT_UNREADABLE",
-                f"cannot enumerate content: {exc}",
-                str(entries_target),
-            )
-        )
-
     root_for_case = target.parent if target.is_file() else target
     directory_root, actual_root_name = (
         _directory_content_root(root_for_case) if root_for_case.is_dir() else (None, "Ancient")
     )
+    payload_root_symlink = (
+        entries_target.is_dir() and directory_root is not None and path_is_link_like(directory_root)
+    )
+    if payload_root_symlink:
+        entries = []
+        issues.append(
+            Issue(
+                "error",
+                "CONTENT_ROOT_SYMLINK",
+                "symbolic link payload root is forbidden",
+                str(directory_root),
+            )
+        )
+    else:
+        try:
+            entries = content_entries(entries_target)
+        except (ModToolError, OSError, zipfile.BadZipFile, RuntimeError) as exc:
+            entries = []
+            issues.append(
+                Issue(
+                    "error",
+                    "CONTENT_UNREADABLE",
+                    f"cannot enumerate content: {exc}",
+                    str(entries_target),
+                )
+            )
     if directory_root is not None and actual_root_name != "Ancient":
         issues.append(
             Issue(
@@ -2084,7 +2227,7 @@ def canonical_manifest(
     ):
         if not field_value.strip():
             raise ModToolError(f"{field_name} cannot be empty in a new project")
-    if not game_version.isdigit():
+    if not _is_ascii_decimal(game_version):
         raise ModToolError("GameVersion must be an unsigned decimal integer such as 22")
     pair = normalise_steam_mod_id(steam_mod_id, allow_single=True)
     blocks: list[tuple[str, str, str]] = [
@@ -2114,12 +2257,45 @@ def _normalise_metadata_update(key: str, value: str) -> tuple[str, str, str]:
     kind = "U32x2" if canonical == "SteamModId" else "F32" if canonical == "Version" else "String"
     if canonical == "SteamModId":
         value = normalise_steam_mod_id(value, allow_single=True)
-    elif canonical == "GameVersion" and not value.isdigit():
+    elif canonical == "GameVersion" and not _is_ascii_decimal(value):
         raise ModToolError("GameVersion must be an unsigned decimal integer such as 22")
     return canonical, value, kind
 
 
+def _manifest_shape_for_mutation(text: str) -> dict[str, str]:
+    _assert_balanced_art_for_mutation(text)
+    fields, kinds, duplicates = manifest_fields(text)
+    ambiguous = list(dict.fromkeys(name for name in duplicates if name in MANIFEST_FIELD_KINDS))
+    if ambiguous:
+        raise ModToolError(
+            "refusing metadata mutation: duplicate manifest fields: " + ", ".join(ambiguous)
+        )
+    wrong_kinds = [
+        f"{name} uses {kinds[name]!r}, expected {expected!r}"
+        for name, expected in MANIFEST_FIELD_KINDS.items()
+        if name in kinds and kinds[name].casefold() != expected.casefold()
+    ]
+    if wrong_kinds:
+        raise ModToolError(
+            "refusing metadata mutation: invalid manifest field type: " + "; ".join(wrong_kinds)
+        )
+    return fields
+
+
+def _validate_required_manifest_values(fields: Mapping[str, str]) -> None:
+    empty = [name for name in MANIFEST_REQUIRED_FIELDS if not fields.get(name, "").strip()]
+    if empty:
+        raise ModToolError(
+            "refusing metadata mutation: required manifest fields are missing or empty: "
+            + ", ".join(empty)
+        )
+    if not _is_ascii_decimal(fields["GameVersion"]):
+        raise ModToolError("GameVersion must be an unsigned decimal integer such as 22")
+    normalise_steam_mod_id(fields["SteamModId"], allow_single=False)
+
+
 def update_manifest_text(text: str, updates: Mapping[str, str]) -> str:
+    _manifest_shape_for_mutation(text)
     result = text
     newline = "\r\n" if "\r\n" in text else "\n"
     for raw_key, raw_value in updates.items():
@@ -2156,6 +2332,8 @@ def update_manifest_text(text: str, updates: Mapping[str, str]) -> str:
                 f'\tName:"{_art_escape(field_name)}"{newline}'
                 f'\tValue:"{_art_escape(value)}"{newline}}}{newline}'
             )
+    final_fields = _manifest_shape_for_mutation(result)
+    _validate_required_manifest_values(final_fields)
     return result
 
 
@@ -2227,11 +2405,14 @@ def apply_metadata(
 ) -> dict[str, Any]:
     ctx = ctx or DiscoveryContext()
     lexical_target = Path(os.path.abspath(os.fspath(target.expanduser())))
-    lexical_manifest = (
-        lexical_target
-        if lexical_target.name.casefold() == "index.art"
-        else lexical_target / "Index.art"
+    lexical_root = (
+        lexical_target.parent if lexical_target.name.casefold() == "index.art" else lexical_target
     )
+    manifest_matches = _root_file_matches(lexical_root, "Index.art")
+    if len(manifest_matches) > 1:
+        names = ", ".join(path.name for path in manifest_matches)
+        raise ModToolError(f"ambiguous root Index.art variants: {names}")
+    lexical_manifest = manifest_matches[0] if manifest_matches else lexical_root / "Index.art"
     if apply:
         assert_no_symlink_components(lexical_manifest)
     manifest_path = lexical_manifest.resolve(strict=False)
@@ -2291,6 +2472,15 @@ def initialise_project(
     ancient_root = target / "Ancient"
     if manifest_path.exists():
         raise ModToolError(f"refusing to overwrite existing {manifest_path}")
+    if target.exists():
+        if not target.is_dir():
+            raise ModToolError(f"project target exists and is not a directory: {target}")
+        try:
+            non_empty = next(target.iterdir(), None) is not None
+        except OSError as exc:
+            raise ModToolError(f"cannot safely inspect project target {target}: {exc}") from exc
+        if non_empty:
+            raise ModToolError(f"refusing to initialise non-empty project directory: {target}")
     text = canonical_manifest(
         title=title,
         description=description,
@@ -2349,10 +2539,12 @@ def _collect_zip_payload(
     root = project / "Ancient"
     if not root.is_dir() or root.name != "Ancient":
         raise ModToolError(f"project must contain exact payload root {root}")
+    if path_is_link_like(root):
+        raise ModToolError(f"symbolic link payload root is forbidden: {root}")
     directories: list[tuple[str, Path]] = []
     files: list[tuple[str, Path, int]] = []
-    for path in root.rglob("*"):
-        if path.is_symlink():
+    for path in _bounded_tree_entries(root):
+        if path_is_link_like(path):
             raise ModToolError(f"symbolic links are not allowed in Mod.zip: {path}")
         relative = path.relative_to(project).as_posix()
         if path.is_dir():
@@ -2486,6 +2678,32 @@ def build_zip_bytes(project: Path) -> tuple[bytes, list[str]]:
             pass
 
 
+def _casefold_path_parts(path: Path) -> tuple[str, ...]:
+    try:
+        resolved = path.resolve(strict=False)
+    except OSError:
+        resolved = path.absolute()
+    return tuple(part.casefold() for part in resolved.parts)
+
+
+def _path_within_casefold(path: Path, root: Path) -> bool:
+    path_parts = _casefold_path_parts(path)
+    root_parts = _casefold_path_parts(root)
+    return len(path_parts) >= len(root_parts) and path_parts[: len(root_parts)] == root_parts
+
+
+def _assert_safe_build_output(project: Path, destination: Path) -> None:
+    manifest = project / "Index.art"
+    thumbnail = project / "Thumbnail.jpg"
+    if _casefold_path_parts(destination) in {
+        _casefold_path_parts(manifest),
+        _casefold_path_parts(thumbnail),
+    } or _path_within_casefold(destination, project / "Ancient"):
+        raise ModToolError(f"build output collides with project source content: {destination}")
+    if destination.exists() and destination.is_dir():
+        raise ModToolError(f"build output must be a file path, not a directory: {destination}")
+
+
 def build_project(
     project: Path,
     *,
@@ -2514,6 +2732,7 @@ def build_project(
     if apply:
         assert_no_symlink_components(lexical_destination)
     destination = lexical_destination.resolve(strict=False)
+    _assert_safe_build_output(project, destination)
     backup_path: Path | None = None
     temporary: Path | None = None
     try:

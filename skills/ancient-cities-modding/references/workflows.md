@@ -45,14 +45,14 @@ Use installed StarCarr (`2175125663`) for a small landmark concept, Phyllitis (`
 Run:
 
 ```text
-python scripts/ancient_cities_mod.py validate <project> --strict
-python scripts/ancient_cities_mod.py conflicts <enabled-paths-in-effective-order> <project>
+acmk validate <project> --strict
+acmk conflicts <enabled-paths-in-effective-order> <project>
 ```
 
 Then explain the save and achievement impact. With explicit confirmation, back up any destination and deploy to the discovered user Mod directory. Do not overwrite a numeric extracted cache. Restart the game fully, enable the mod at the intended position, test a separate/new save, and parse the log:
 
 ```text
-python scripts/ancient_cities_mod.py log
+acmk log
 ```
 
 Treat `ERROR`, `Warning`, `failed to load`, `needs to be updated`, obsolete packaging, missing Type, image failures, and unresolved Mesh/Render references as failures relevant to the affected mod.
