@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ancient Cities Modding"
+  short_description: "Build and validate Ancient Cities Workshop mods"
+  default_prompt: "Use $ancient-cities-modding to create and validate a mod for my installed Ancient Cities build."

@@ -1,0 +1,82 @@
+name: Compatibility report
+description: Record a reproducible result against a specific Ancient Cities build.
+title: "[Compatibility]: "
+labels:
+  - compatibility
+  - needs-triage
+body:
+  - type: input
+    id: toolkit-version
+    attributes:
+      label: Toolkit version or commit
+    validations:
+      required: true
+  - type: input
+    id: game-build
+    attributes:
+      label: Exact Ancient Cities build
+    validations:
+      required: true
+  - type: input
+    id: test-date
+    attributes:
+      label: Test date
+      placeholder: YYYY-MM-DD
+    validations:
+      required: true
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: subject
+    attributes:
+      label: What was tested?
+      description: Name only original or authorized mod material; provide public links where useful.
+    validations:
+      required: true
+  - type: textarea
+    id: procedure
+    attributes:
+      label: Procedure and result
+      description: Include clean-launch status and enough detail for another person to repeat the test.
+    validations:
+      required: true
+  - type: dropdown
+    id: save
+    attributes:
+      label: Save used
+      options:
+        - New disposable save
+        - Backed-up test save
+        - No save loaded
+    validations:
+      required: true
+  - type: dropdown
+    id: achievements
+    attributes:
+      label: Achievement impact observed
+      options:
+        - No impact observed
+        - Achievements disabled or affected
+        - Not tested
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmation
+      options:
+        - label: I tested after a clean game launch against the build stated above.
+          required: true
+        - label: I have not attached game files, saves, or redistributed Workshop content.
+          required: true
+        - label: I understand this result may become stale after a game update.
+          required: true

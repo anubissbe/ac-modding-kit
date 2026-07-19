@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Usage questions and ideas
+    url: https://github.com/anubissbe/ac-modding-kit/discussions
+    about: Ask for help or discuss ideas before opening an actionable issue.
+  - name: Ancient Cities Workshop discussions
+    url: https://steamcommunity.com/workshop/discussions/18446744073709551615/?appid=667610
+    about: Search community knowledge about the game and Steam Workshop.
+  - name: Confidential security report
+    url: https://github.com/anubissbe/ac-modding-kit/security/advisories/new
+    about: Privately report a vulnerability; do not disclose it in an issue.

@@ -1,0 +1,53 @@
+name: Feature request
+description: Propose a focused, safe improvement to the toolkit.
+title: "[Feature]: "
+labels:
+  - enhancement
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explain the user problem before the implementation. Large format or workflow
+        changes may be moved to a discussion for design review.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who is affected, and what cannot be done safely or reliably today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe observable behavior, not just an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and risk
+      description: Note expected game-build, UTF-16LE, save, achievement, and Workshop implications.
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Evidence and provenance
+      description: Link public documentation or describe original/synthetic examples. Do not upload game assets.
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Project boundaries
+      options:
+        - label: This proposal does not require redistributing game or Workshop assets.
+          required: true
+        - label: This proposal does not require binary reverse engineering.
+          required: true
+        - label: I understand that static validation cannot guarantee in-game compatibility.
+          required: true

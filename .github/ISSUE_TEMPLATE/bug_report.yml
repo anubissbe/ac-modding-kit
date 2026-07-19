@@ -1,0 +1,96 @@
+name: Bug report
+description: Report a reproducible defect in the toolkit.
+title: "[Bug]: "
+labels:
+  - bug
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do not attach game files, Workshop content, saves,
+        secrets, or output obtained through binary reverse engineering.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Command-line interface
+        - Validation
+        - Documentation or reference material
+        - Installation or packaging
+        - GitHub automation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: toolkit-version
+    attributes:
+      label: Toolkit version or commit
+      placeholder: "0.1.0 or commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: game-build
+    attributes:
+      label: Ancient Cities build
+      description: Use "not applicable" if the defect does not involve the running game.
+      placeholder: "Exact build shown by Steam or the game"
+    validations:
+      required: true
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Provide a minimal, repeatable example using synthetic or original data.
+      placeholder: |
+        1. Run …
+        2. Validate …
+        3. Observe …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized output
+      description: Redact usernames, local paths, Steam IDs, tokens, and personal data.
+      render: text
+  - type: textarea
+    id: game-test
+    attributes:
+      label: In-game test details
+      description: If applicable, give test date, clean-launch status, save type, and achievement impact.
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmation
+      options:
+        - label: I reproduced this with the newest toolkit revision.
+          required: true
+        - label: I have not attached proprietary game or third-party Workshop content.
+          required: true
+        - label: Any in-game reproduction used a backed-up or disposable save, or was not applicable.
+          required: true
