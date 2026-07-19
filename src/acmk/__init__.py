@@ -1,0 +1,157 @@
+"""Ancient Cities Modding Kit public Python API."""
+
+from __future__ import annotations
+
+from ._version import (
+    PROJECT_SCHEMA_VERSION,
+    REPORT_SCHEMA_VERSION,
+    RUNTIME_TEST_SCHEMA_VERSION,
+    SDK_API_VERSION,
+    __version__,
+)
+from .builder import DraftProjectBuilder, DraftProjectPlan, DraftProjectResult, PlannedContent
+from .config import (
+    AchievementImpact,
+    Compatibility,
+    ProjectConfig,
+    ProjectPaths,
+    ProvenanceStatus,
+    RuntimeSaveType,
+    RuntimeStatus,
+    SaveImpact,
+    SkeletonSource,
+)
+from .errors import (
+    ACMKError,
+    ContractError,
+    LegacyModToolError,
+    ProjectError,
+    SourceChangedError,
+    UnsafePathError,
+    ValidationFailedError,
+)
+from .knowledge import (
+    KnowledgeDocument,
+    KnowledgeError,
+    KnowledgeTopic,
+    SearchHit,
+    UnknownTopicError,
+)
+from .knowledge import (
+    read as read_knowledge,
+)
+from .knowledge import (
+    search as search_knowledge,
+)
+from .knowledge import (
+    topics as knowledge_topics,
+)
+from .manifest import (
+    GameVersion,
+    ManifestDocument,
+    ManifestSpec,
+    NewlineStyle,
+    SteamModId,
+    TextAssetKind,
+    Utf16TextDocument,
+)
+from .paths import AncientPath, EngineReference, ProjectRelativePath
+from .project import (
+    FileSnapshot,
+    ProjectConfigPlan,
+    ProjectConfigResult,
+    ProjectImporter,
+    ProjectImportPlan,
+    ProjectImportResult,
+    ProjectLayout,
+    ReleasePlan,
+    ReleaseResult,
+    RuntimeTestPlan,
+    RuntimeTestResult,
+    SDKProject,
+    SourceFingerprint,
+)
+from .reports import (
+    CheckStatus,
+    DiscoverySnapshot,
+    DoctorCheck,
+    DoctorReport,
+    ExecutionMode,
+    Issue,
+    Severity,
+    ValidationProfile,
+    ValidationReport,
+    envelope,
+)
+from .sdk import AncientCitiesSDK, DiscoveryOptions
+
+__all__ = [
+    "ACMKError",
+    "AchievementImpact",
+    "AncientCitiesSDK",
+    "AncientPath",
+    "CheckStatus",
+    "Compatibility",
+    "ContractError",
+    "DiscoveryOptions",
+    "DiscoverySnapshot",
+    "DoctorCheck",
+    "DoctorReport",
+    "DraftProjectBuilder",
+    "DraftProjectPlan",
+    "DraftProjectResult",
+    "EngineReference",
+    "ExecutionMode",
+    "FileSnapshot",
+    "GameVersion",
+    "Issue",
+    "KnowledgeDocument",
+    "KnowledgeError",
+    "KnowledgeTopic",
+    "LegacyModToolError",
+    "ManifestDocument",
+    "ManifestSpec",
+    "NewlineStyle",
+    "PROJECT_SCHEMA_VERSION",
+    "PlannedContent",
+    "ProjectConfig",
+    "ProjectConfigPlan",
+    "ProjectConfigResult",
+    "ProjectError",
+    "ProjectImportPlan",
+    "ProjectImportResult",
+    "ProjectImporter",
+    "ProjectLayout",
+    "ProjectPaths",
+    "ProjectRelativePath",
+    "ProvenanceStatus",
+    "REPORT_SCHEMA_VERSION",
+    "RUNTIME_TEST_SCHEMA_VERSION",
+    "ReleasePlan",
+    "ReleaseResult",
+    "RuntimeStatus",
+    "RuntimeSaveType",
+    "RuntimeTestPlan",
+    "RuntimeTestResult",
+    "SDKProject",
+    "SDK_API_VERSION",
+    "SaveImpact",
+    "SearchHit",
+    "Severity",
+    "SkeletonSource",
+    "SourceFingerprint",
+    "SourceChangedError",
+    "SteamModId",
+    "TextAssetKind",
+    "UnsafePathError",
+    "UnknownTopicError",
+    "Utf16TextDocument",
+    "ValidationFailedError",
+    "ValidationProfile",
+    "ValidationReport",
+    "__version__",
+    "envelope",
+    "knowledge_topics",
+    "read_knowledge",
+    "search_knowledge",
+]

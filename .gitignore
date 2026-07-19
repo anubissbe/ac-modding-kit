@@ -12,7 +12,7 @@ dist/
 *.egg-info/
 
 # Environments and local configuration
-.venv/
+.venv*/
 venv/
 .env
 .env.*

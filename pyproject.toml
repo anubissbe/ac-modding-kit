@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ancient-cities-modding-kit"
-version = "0.1.0"
+version = "0.2.0a1"
 description = "Community tooling and validation for Ancient Cities mods"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,22 +24,26 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Topic :: Games/Entertainment :: Simulation",
+  "Typing :: Typed",
 ]
 dependencies = []
 
 [project.optional-dependencies]
 test = [
+  "jsonschema>=4.23",
   "pytest>=8.0",
 ]
 dev = [
   "build>=1.2",
+  "jsonschema>=4.23",
+  "mypy>=1.15",
   "pytest>=8.0",
   "ruff>=0.5",
   "twine>=5.0",
 ]
 
 [project.scripts]
-acmk = "ancient_cities_mod:main"
+acmk = "acmk.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/anubissbe/ac-modding-kit"
@@ -48,9 +52,15 @@ Issues = "https://github.com/anubissbe/ac-modding-kit/issues"
 Changelog = "https://github.com/anubissbe/ac-modding-kit/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
-package-dir = { "" = "skills/ancient-cities-modding/scripts" }
+packages = ["acmk", "acmk.knowledge_data", "acmk.schemas"]
+package-dir = { "" = "skills/ancient-cities-modding/scripts", acmk = "src/acmk", "acmk.knowledge_data" = "skills/ancient-cities-modding/references", "acmk.schemas" = "schemas" }
 py-modules = ["ancient_cities_mod"]
 include-package-data = false
+
+[tool.setuptools.package-data]
+acmk = ["py.typed"]
+"acmk.knowledge_data" = ["*.md"]
+"acmk.schemas" = ["*.json", "*.md"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
@@ -60,7 +70,19 @@ testpaths = ["tests"]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-src = ["skills/ancient-cities-modding/scripts", "tests"]
+src = ["src", "skills/ancient-cities-modding/scripts", "tests", "examples"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/acmk"]
+mypy_path = ["skills/ancient-cities-modding/scripts"]
+strict = true
+show_error_codes = true
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = "ancient_cities_mod"
+ignore_errors = true

@@ -88,6 +88,13 @@ class EncodingAndParserTests(unittest.TestCase):
         with self.assertRaises(ac.ModToolError):
             ac.decode_utf16le_art(codecs.BOM_UTF16_LE + b"\x00\xd8", "bad.art")
 
+    def test_art_requires_exactly_one_leading_bom(self) -> None:
+        doubled = codecs.BOM_UTF16_LE * 2 + "Node:{}".encode("utf-16-le")
+        with self.assertRaisesRegex(ac.ModToolError, "more than one leading"):
+            ac.decode_utf16le_art(doubled, "double.art")
+        with self.assertRaisesRegex(ac.ModToolError, "exactly one BOM"):
+            ac.encode_utf16le_art("\ufeffNode:{}")
+
     def test_parser_tolerates_unknown_blocks(self) -> None:
         text = (
             '\nOuter:{\n Name:"Parent"\n'
@@ -128,9 +135,32 @@ class EncodingAndParserTests(unittest.TestCase):
         with self.assertRaisesRegex(ac.ModToolError, "unsigned 32-bit"):
             ac.normalise_steam_mod_id("9" * 10_000 + ",0", allow_single=False)
 
+    def test_game_version_and_steam_id_require_ascii_digits(self) -> None:
+        with self.assertRaisesRegex(ac.ModToolError, "unsigned integer pair"):
+            ac.normalise_steam_mod_id("١,0", allow_single=False)
+        with self.assertRaisesRegex(ac.ModToolError, "unsigned decimal integer"):
+            ac.canonical_manifest(
+                title="Synthetic",
+                description="Synthetic",
+                changelog="Initial",
+                game_version="٢٢",
+                mod_type="Generic",
+                steam_mod_id="0",
+            )
+
     def test_literal_file_references(self) -> None:
         text = 'Node:{\nFile:"Images/Picture.jpg"\n}\nString:{Name:"File" Value:"Sound.wav"}'
         self.assertEqual(ac.parse_literal_file_refs(text), ["Images/Picture.jpg", "Sound.wav"])
+
+    def test_engine_references_are_not_normalised_as_files(self) -> None:
+        current = "Ancient/Entity/Index.art"
+        for reference in ("../Node", "~/Node", "/System/Node"):
+            with self.subTest(reference=reference):
+                self.assertIsNone(ac._normalise_reference(current, reference))
+        self.assertEqual(
+            ac._normalise_reference(current, "Images/Picture.png"),
+            "Ancient/Entity/Images/Picture.png",
+        )
 
 
 class ValidationTests(SyntheticTempTestCase):
@@ -310,8 +340,57 @@ class ValidationTests(SyntheticTempTestCase):
         report = ac.validate_target(project, ac.DiscoveryContext(game_dir=self.root / "game"))
         self.assertIn("BASE_OVERRIDE_CASE", {issue["code"] for issue in report["issues"]})
 
+    def test_ambiguous_root_file_case_variants_are_errors(self) -> None:
+        project = make_project(self.root / "ambiguous-root")
+        (project / "Ancient" / "data.txt").write_bytes(b"data")
+        original = ac._root_file_matches
+        cases = (
+            ("Index.art", "index.ART", "MANIFEST_AMBIGUOUS"),
+            ("Thumbnail.jpg", "thumbnail.JPG", "THUMBNAIL_AMBIGUOUS"),
+        )
+        for expected, variant, code in cases:
+            with self.subTest(expected=expected):
+
+                def matches(
+                    root: Path,
+                    name: str,
+                    expected_name: str = expected,
+                    variant_name: str = variant,
+                ) -> list[Path]:
+                    if name == expected_name:
+                        return [root / expected_name, root / variant_name]
+                    return original(root, name)
+
+                with mock.patch.object(ac, "_root_file_matches", side_effect=matches):
+                    report = ac.validate_target(project)
+                self.assertIn(code, {issue["code"] for issue in report["issues"]})
+
+    def test_symlink_payload_root_is_rejected_by_validation_and_build(self) -> None:
+        project = make_project(self.root / "payload-link")
+        payload = project / "Ancient"
+        payload.rmdir()
+        external = self.root / "external-payload"
+        external.mkdir()
+        (external / "private.txt").write_bytes(b"must not be packaged")
+        try:
+            os.symlink(external, payload, target_is_directory=True)
+        except (NotImplementedError, OSError) as exc:
+            self.skipTest(f"symbolic links unavailable: {exc}")
+        report = ac.validate_target(project)
+        self.assertIn("CONTENT_ROOT_SYMLINK", {issue["code"] for issue in report["issues"]})
+        with self.assertRaisesRegex(ac.ModToolError, "source validation failed"):
+            ac.build_project(project, output=None, apply=False)
+
 
 class ConflictBuildAndMetadataTests(SyntheticTempTestCase):
+    def test_directory_enumeration_stops_at_entry_limit(self) -> None:
+        tree = self.root / "bounded-tree"
+        tree.mkdir()
+        (tree / "one.txt").write_bytes(b"1")
+        (tree / "two.txt").write_bytes(b"2")
+        with self.assertRaisesRegex(ac.ModToolError, "1-entry limit"):
+            ac._bounded_tree_entries(tree, limit=1)
+
     def test_conflict_detection_reports_winner_and_difference(self) -> None:
         first = make_project(self.root / "one", title="First")
         second = make_project(self.root / "two", title="Second")
@@ -387,6 +466,21 @@ class ConflictBuildAndMetadataTests(SyntheticTempTestCase):
         self.assertEqual(Path(rebuilt["backup"]).read_bytes(), original_zip)
         self.assertNotEqual(rebuilt["sha256"], result["sha256"])
 
+    def test_build_output_cannot_replace_project_sources(self) -> None:
+        project = make_project(self.root / "build-output-collision")
+        payload = project / "Ancient" / "payload.txt"
+        payload.write_bytes(b"payload")
+        protected = (project / "Index.art", project / "Thumbnail.jpg", payload)
+        before = {path: path.read_bytes() for path in protected}
+        destinations = (*protected, project / "Ancient", project / "Ancient" / "nested.zip")
+        for destination in destinations:
+            for apply in (False, True):
+                with self.subTest(destination=destination, apply=apply):
+                    with self.assertRaisesRegex(ac.ModToolError, "collides with project source"):
+                        ac.build_project(project, output=destination, apply=apply)
+        self.assertEqual({path: path.read_bytes() for path in protected}, before)
+        self.assertFalse(any(project.glob("*.bak*")))
+
     def test_metadata_dry_run_and_apply_creates_backup(self) -> None:
         project = make_project(self.root / "metadata")
         original = (project / "Index.art").read_bytes()
@@ -400,6 +494,56 @@ class ConflictBuildAndMetadataTests(SyntheticTempTestCase):
         )
         self.assertEqual(fields["Title"], "Changed")
         self.assertEqual(Path(applied["backup"]).read_bytes(), original)
+
+    def test_metadata_refuses_duplicate_or_wrong_type_fields_without_writing(self) -> None:
+        duplicate_project = make_project(self.root / "metadata-duplicate")
+        duplicate_manifest = duplicate_project / "Index.art"
+        duplicate_text = ac.decode_utf16le_art(duplicate_manifest.read_bytes())
+        duplicate_text += '\nString:{Name:"Title" Value:"Duplicate"}\n'
+        write_art(duplicate_manifest, duplicate_text)
+        duplicate_before = duplicate_manifest.read_bytes()
+        with self.assertRaisesRegex(ac.ModToolError, "duplicate manifest fields"):
+            ac.apply_metadata(duplicate_project, {"Title": "Changed"}, apply=True, backup=True)
+        self.assertEqual(duplicate_manifest.read_bytes(), duplicate_before)
+
+        type_project = make_project(self.root / "metadata-type")
+        type_manifest = type_project / "Index.art"
+        type_text = ac.decode_utf16le_art(type_manifest.read_bytes())
+        expected = 'String:\n{\n\tName:"Title"'
+        replacement = 'U32:\n{\n\tName:"Title"'
+        self.assertIn(expected, type_text)
+        write_art(type_manifest, type_text.replace(expected, replacement, 1))
+        type_before = type_manifest.read_bytes()
+        with self.assertRaisesRegex(ac.ModToolError, "invalid manifest field type"):
+            ac.apply_metadata(type_project, {"Title": "Changed"}, apply=True, backup=True)
+        self.assertEqual(type_manifest.read_bytes(), type_before)
+
+    def test_metadata_refuses_empty_required_field_without_writing(self) -> None:
+        project = make_project(self.root / "metadata-empty")
+        manifest = project / "Index.art"
+        before = manifest.read_bytes()
+        for field in ("Title", "Description", "Changelog", "Type"):
+            with self.subTest(field=field):
+                with self.assertRaisesRegex(ac.ModToolError, "missing or empty"):
+                    ac.apply_metadata(project, {field: "   "}, apply=True, backup=True)
+                self.assertEqual(manifest.read_bytes(), before)
+        self.assertFalse(any(project.glob("Index.art.bak*")))
+
+    def test_metadata_refuses_unbalanced_art_without_writing(self) -> None:
+        cases = {
+            "brace": valid_manifest() + "\nNode:{\n",
+            "quote": valid_manifest() + '\nNode:{Name:"unterminated}\n',
+        }
+        for name, malformed in cases.items():
+            with self.subTest(name=name):
+                project = make_project(self.root / f"metadata-unbalanced-{name}")
+                manifest = project / "Index.art"
+                write_art(manifest, malformed)
+                before = manifest.read_bytes()
+                with self.assertRaisesRegex(ac.ModToolError, "refusing metadata mutation"):
+                    ac.apply_metadata(project, {"Title": "Changed"}, apply=True, backup=True)
+                self.assertEqual(manifest.read_bytes(), before)
+                self.assertFalse(any(project.glob("Index.art.bak*")))
 
     def test_backup_creation_treats_dangling_link_name_as_occupied(self) -> None:
         project = make_project(self.root / "backup-link")
@@ -471,6 +615,27 @@ class ConflictBuildAndMetadataTests(SyntheticTempTestCase):
         self.assertTrue((project / "Index.art").is_file())
         self.assertTrue((project / "Ancient").is_dir())
         self.assertFalse((project / "Thumbnail.jpg").exists())
+
+    def test_initialise_project_refuses_non_empty_directory(self) -> None:
+        project = self.root / "non-empty-project"
+        project.mkdir()
+        marker = project / "keep.txt"
+        marker.write_bytes(b"keep")
+        for apply in (False, True):
+            with self.subTest(apply=apply):
+                with self.assertRaisesRegex(ac.ModToolError, "non-empty project directory"):
+                    ac.initialise_project(
+                        project,
+                        title="New",
+                        description="Synthetic",
+                        changelog="Initial",
+                        game_version="22",
+                        mod_type="Generic",
+                        steam_mod_id="0",
+                        apply=apply,
+                    )
+        self.assertEqual(marker.read_bytes(), b"keep")
+        self.assertFalse((project / "Index.art").exists())
 
 
 class DiscoveryAndLogTests(SyntheticTempTestCase):

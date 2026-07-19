@@ -62,3 +62,25 @@ Use `python scripts/ancient_cities_mod.py --help` for the complete command surfa
   skill without repository tests runs a smaller UTF-16LE/manifest smoke test.
 
 Treat warnings as work items, not decoration. Do not claim a mod is compatible until the installed build loads it without relevant errors after a full restart.
+
+## Repository SDK
+
+When a checkout or installed Python package exposes `acmk` version `0.2.0a1` or newer,
+prefer its typed project workflow for new work while retaining the safety rules above:
+
+- `acmk doctor` checks the live installation, compatibility fingerprint, user paths, and
+  Blender without changing them.
+- `acmk knowledge list|read|search` exposes the audited reference set offline.
+- `acmk project import` copies a current non-numeric in-game skeleton into a structured
+  authoring project; it is dry-run unless `--apply` is explicitly supplied.
+- Keep runtime files in `src/`, authoring sources in `assets-src/`, local reports in
+  `.acmk/`, and isolated upload candidates in `dist/workshop/`.
+- Use `project check --profile authoring` while editing and `--profile release` only after
+  licensing/contact, current-build, provenance, save/achievement, and runtime evidence are
+  complete.
+- `project record-test` records a user-performed test and sanitized log summary; it never
+  launches the game. `project stage` builds an isolated candidate; it never deploys or
+  uploads it.
+
+`acmk.toml` and SDK JSON schemas describe ACMK-owned project/report contracts only. They
+must never be presented as a complete schema for the game's open-ended `.art` format.

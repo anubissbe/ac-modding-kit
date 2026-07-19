@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/anubissbe/ac-modding-kit/main/schemas/acmk-project-v1.schema.json",
+  "title": "Parsed ACMK project configuration v1",
+  "description": "JSON Schema for the object obtained after parsing acmk.toml.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project", "compatibility", "paths", "relations"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "version",
+        "mod_type",
+        "license",
+        "contact",
+        "skeleton",
+        "runtime_status",
+        "save_impact",
+        "achievement_impact",
+        "provenance_status",
+        "provenance_notes"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{1,63}$"},
+        "name": {"type": "string", "pattern": "^(?=.*\\S)[^\\u0000]+$"},
+        "version": {"type": "string", "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"},
+        "mod_type": {"type": "string", "pattern": "^(?=.*\\S)[^\\u0000]+$"},
+        "license": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9.+-]*(?: (?:AND|OR|WITH) [A-Za-z0-9][A-Za-z0-9.+-]*)*$"},
+        "contact": {"type": "string", "pattern": "^[^\\u0000]*$"},
+        "skeleton": {"enum": ["game-generated", "community-draft"]},
+        "runtime_status": {"enum": ["untested", "passed", "failed"]},
+        "save_impact": {"enum": ["unknown", "none-observed", "new-save-recommended", "new-save-required"]},
+        "achievement_impact": {"enum": ["unknown", "disabled", "none-observed"]},
+        "provenance_status": {"enum": ["unreviewed", "reviewed"]},
+        "provenance_notes": {"type": "string", "pattern": "^[^\\u0000]*$"}
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["game_version", "game_semver", "steam_build_id", "content_hash"],
+      "properties": {
+        "game_version": {"type": "string", "pattern": "^[0-9]+$"},
+        "game_semver": {"type": "string"},
+        "steam_build_id": {"type": "string", "pattern": "^(?:[0-9]+)?$"},
+        "content_hash": {"type": "string", "pattern": "^(?:[0-9A-Fa-f]+)?$"}
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "assets", "state", "distribution"],
+      "properties": {
+        "source": {"$ref": "#/$defs/projectPath"},
+        "assets": {"$ref": "#/$defs/projectPath"},
+        "state": {"$ref": "#/$defs/projectPath"},
+        "distribution": {"$ref": "#/$defs/projectPath"}
+      }
+    },
+    "relations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dependencies", "conflicts"],
+      "properties": {
+        "dependencies": {"type": "array", "items": {"type": "string", "pattern": "^(?=.*\\S)[^\\u0000]+$"}, "uniqueItems": true},
+        "conflicts": {"type": "array", "items": {"type": "string", "pattern": "^(?=.*\\S)[^\\u0000]+$"}, "uniqueItems": true}
+      }
+    }
+  },
+  "$defs": {
+    "projectPath": {
+      "type": "string",
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*//)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*[<>:\"|?*\\u0000-\\u001F])(?!.*[ .](?:/|$)).+$"
+    }
+  }
+}

@@ -4,9 +4,9 @@
 [![CodeQL](https://github.com/anubissbe/ac-modding-kit/actions/workflows/codeql.yml/badge.svg)](https://github.com/anubissbe/ac-modding-kit/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-An unofficial, community-maintained toolkit for creating and validating mods for
-*Ancient Cities* (Steam app `667610`). It turns the community's documented modding
-knowledge into repeatable checks and small, auditable tools.
+An unofficial, community-maintained Python SDK and toolkit for creating and validating
+mods for *Ancient Cities* (Steam app `667610`). It turns audited community knowledge and
+the game's observable data interface into typed, repeatable, and auditable workflows.
 
 > [!IMPORTANT]
 > This project is not affiliated with, endorsed by, or supported by Uncasual Games or
@@ -30,14 +30,24 @@ knowledge into repeatable checks and small, auditable tools.
 ## What is included
 
 - a Codex skill with a conservative Ancient Cities modding workflow;
-- a small `acmk` command-line interface for inspection and validation;
-- reference material derived from public community documentation;
-- automated tests and GitHub checks for supported Python versions.
+- a typed, standard-library-only `acmk` Python package;
+- a backwards-compatible CLI for discovery, inspection, validation, conflicts, logs,
+  deterministic packages, and safe metadata changes;
+- a structured `acmk.toml` authoring project with separate runtime, authoring, state, and
+  Workshop-staging directories;
+- atomic import of current game-generated skeletons and dry-run-first release staging;
+- lossless UTF-16LE ART/LOC documents, validated value objects, and immutable reports;
+- a searchable offline knowledge base derived from audited public documentation;
+- JSON schemas, examples, strict typing, synthetic security tests, and GitHub checks.
 
 Repository layout:
 
 ```text
 skills/ancient-cities-modding/  Skill, scripts, audited references, and safety guidance
+src/acmk/                       Typed public Python SDK
+docs/                           Tutorials, reference, and compatibility policy
+schemas/                        Versioned SDK-owned contracts
+examples/                       Read-only and dry-run-first Python examples
 tests/                          Automated tests with synthetic fixtures
 .github/                        Contribution templates and automation
 ```
@@ -56,6 +66,8 @@ py -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -e .
 acmk --help
+acmk sdk-info
+acmk doctor
 ```
 
 POSIX shell (static inspection/validation on Linux or macOS):
@@ -69,9 +81,9 @@ python -m pip install -e .
 acmk --help
 ```
 
-The static validators are cross-platform and CI-tested. Automatic discovery of Steam,
-the redirected Windows Documents folder, and the live in-game workflow are currently
-Windows-focused.
+The static validators run in Windows and Linux CI. macOS is best-effort rather than part
+of the current test matrix. Automatic Steam discovery, redirected Windows Documents,
+Blender discovery, and the live in-game workflow are Windows-focused.
 
 For Codex, ask the standard `skill-installer` to install path
 `skills/ancient-cities-modding` from `anubissbe/ac-modding-kit`, then restart Codex so
@@ -84,6 +96,61 @@ acmk --json discover
 The tools do not install or publish Workshop items automatically: review generated
 output before copying it into a local mod directory or uploading it through Steam.
 
+## Python SDK
+
+```python
+from acmk import AncientCitiesSDK, ValidationProfile
+
+sdk = AncientCitiesSDK()
+current = sdk.discover()
+print(current.game_semver, current.steam_build_id, current.game_version)
+
+project = sdk.open_project(r"C:\mods\my-project")
+report = project.validate(ValidationProfile.AUTHORING)
+print(report.to_dict())
+```
+
+The public API includes typed game/version identifiers, lossless UTF-16 documents,
+manifest scans/specifications, exact `AncientPath` values, project configuration,
+discovery, doctor checks, authoring/release profiles, skeleton import, runtime-test
+records, deterministic staging, and offline knowledge search. `acmk/py.typed` enables
+editor and type-checker support.
+
+Read the [SDK guide](docs/sdk.md), [first safe mod tutorial](docs/tutorials/first-safe-mod.md),
+[support matrix](docs/reference/support-matrix.md), and
+[compatibility policy](docs/compatibility-policy.md). Maintainers also have a
+[release checklist](docs/releasing.md).
+
+## Structured projects
+
+```text
+my-project/
+  acmk.toml
+  src/                    # Index.art, Thumbnail.jpg, Ancient/... runtime files
+  assets-src/             # Blender and other authoring sources; never packaged
+  .acmk/                  # local fingerprints and sanitized reports
+  dist/workshop/          # isolated Index.art, Thumbnail.jpg, Mod.zip
+```
+
+Import a skeleton produced by the current game. This previews without writing:
+
+```powershell
+acmk project import "<Documents>\Uncasual Games\Ancient Cities\Mod\MySkeleton" `
+  "C:\mods\my-project" --id my-project
+```
+
+Add `--apply` only after reviewing the plan. Use `acmk project configure` to record the
+version, license, contact, and provenance review. `configure`, `record-test`, and `stage`
+all preserve the same preview-first rule. Staging never deploys to the game and never
+publishes to Steam; changing runtime source after a recorded test invalidates release
+readiness. Configuration rewrites return a backup path and use a canonical layout, so keep
+custom notes in documentation rather than unsupported `acmk.toml` keys or comments.
+
+Release checks require the chosen license identifier and contact details to appear in the
+manifest Description or Content as well as the project metadata. These fields and a
+`reviewed` provenance status are author attestations; verify the underlying rights yourself
+and repeat the information in the manual Workshop listing.
+
 ## Validation checklist
 
 Before sharing a mod:
@@ -95,8 +162,9 @@ Before sharing a mod:
 5. Document the build, test date, dependencies, known conflicts, save impact, and
    achievement impact.
 
-Passing toolkit checks is not proof of in-game compatibility. The running game is the
-final validator.
+Passing toolkit checks is not proof of in-game compatibility. Only a clean launch on the
+recorded build, a disposable save, and a relevant log review can establish runtime
+compatibility.
 
 ## Community
 
