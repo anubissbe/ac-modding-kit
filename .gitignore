@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Environments and local configuration
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+*.local.toml
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.code-workspace
+*.swp
+Thumbs.db
+.DS_Store
+
+# Local reports and scratch output
+artifacts/
+coverage.xml
+*.log
+*.tmp
+tests/.fixture-*/
+tests/.tmp-*/
+
+# Never commit local game, Workshop, or save data
+game-assets/
+local-mods/
+steamapps/
+vendor-game/
+workshop-content/
+*.sav
+*.save

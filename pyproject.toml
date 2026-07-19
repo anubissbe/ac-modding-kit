@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ancient-cities-modding-kit"
+version = "0.1.0"
+description = "Community tooling and validation for Ancient Cities mods"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Bert Colemont" },
+]
+keywords = ["ancient-cities", "modding", "steam-workshop", "validation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Games/Entertainment :: Simulation",
+]
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0",
+]
+dev = [
+  "build>=1.2",
+  "pytest>=8.0",
+  "ruff>=0.5",
+  "twine>=5.0",
+]
+
+[project.scripts]
+acmk = "ancient_cities_mod:main"
+
+[project.urls]
+Homepage = "https://github.com/anubissbe/ac-modding-kit"
+Documentation = "https://github.com/anubissbe/ac-modding-kit#readme"
+Issues = "https://github.com/anubissbe/ac-modding-kit/issues"
+Changelog = "https://github.com/anubissbe/ac-modding-kit/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+package-dir = { "" = "skills/ancient-cities-modding/scripts" }
+py-modules = ["ancient_cities_mod"]
+include-package-data = false
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra --strict-config --strict-markers"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["skills/ancient-cities-modding/scripts", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
