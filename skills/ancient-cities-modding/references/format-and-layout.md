@@ -60,7 +60,9 @@ Locally proven formats include TGA, PNG, JPG, DDS, FBX, and WAV. Installed Works
 - Follow the dimensions, channels, filenames, material nodes, scale, orientation, and case of a current same-category exemplar.
 - Use a square JPEG preview; 512 x 512 is the safest locally observed default. Do not hard-fail other square sizes without a current game error.
 - Validate PNG/JPEG/WAV/FBX signatures. Treat DDS/TGA semantic validation as exemplar-driven unless a specialist tool is available.
-- Do not promise new FBX creation when no FBX authoring tool is installed.
+- Discover and verify an FBX authoring tool before promising model creation. The modding-kit
+  model pack pins Blender 5.2.0 LTS and includes Blender-side source/FBX validation when the
+  repository checkout is available; simple headers remain insufficient.
 
 ## Load semantics
 

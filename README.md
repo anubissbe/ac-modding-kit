@@ -38,7 +38,9 @@ the game's observable data interface into typed, repeatable, and auditable workf
 - atomic import of current game-generated skeletons and dry-run-first release staging;
 - lossless UTF-16LE ART/LOC documents, validated value objects, and immutable reports;
 - a searchable offline knowledge base derived from audited public documentation;
-- JSON schemas, examples, strict typing, synthetic security tests, and GitHub checks.
+- three original Blender/FBX authoring examples for a building, plant, and resource;
+- JSON schemas, examples, strict typing, synthetic security and model tests, and GitHub
+  checks for supported Python and Blender versions.
 
 Repository layout:
 
@@ -48,6 +50,8 @@ src/acmk/                       Typed public Python SDK
 docs/                           Tutorials, reference, and compatibility policy
 schemas/                        Versioned SDK-owned contracts
 examples/                       Read-only and dry-run-first Python examples
+modeling/                       Original model sources, exports, metadata, and provenance
+tools/blender/                  Scripted model generator and semantic Blender validator
 tests/                          Automated tests with synthetic fixtures
 .github/                        Contribution templates and automation
 ```
@@ -151,6 +155,25 @@ manifest Description or Content as well as the project metadata. These fields an
 `reviewed` provenance status are author attestations; verify the underlying rights yourself
 and repeat the information in the manual Workshop listing.
 
+## Starter models
+
+The [modeling guide](modeling/README.md) defines the source, export, texture, provenance,
+and validation contract for the original starter shelter, plant, and resource. Their
+reference toolchain is Blender 5.2.0 LTS, pinned to an official portable archive and
+SHA-256 digest.
+
+The pack includes a scripted generator plus a Blender-side validator that reopens all
+source files and round-trips every FBX export. The dedicated model workflow downloads only
+the exact pinned official archive after verifying its digest.
+
+Model binaries are repository-source content and are intentionally not installed by the
+lightweight Python package; clone or download the repository when authoring models.
+
+These assets are intentionally marked `runtime_tested = false`. They contain no game or
+Workshop material and are not complete gameplay mods. Static checks can verify file shape,
+metadata, and integrity, but only an explicitly authorized test in the current game can
+establish runtime compatibility.
+
 ## Validation checklist
 
 Before sharing a mod:
@@ -161,6 +184,10 @@ Before sharing a mod:
 4. Restart the game and repeat the test from a clean launch.
 5. Document the build, test date, dependencies, known conflicts, save impact, and
    achievement impact.
+
+For model contributions, also update the asset manifest, semantic report, preview, and
+SHA-256 manifest. Keep Blender and FBX files compact; this repository does not currently
+use Git LFS.
 
 Passing toolkit checks is not proof of in-game compatibility. Only a clean launch on the
 recorded build, a disposable save, and a relevant log review can establish runtime

@@ -33,10 +33,10 @@ jobs:
         run: python -m pip install --upgrade --editable ".[dev]"
 
       - name: Check formatting
-        run: python -m ruff format --check src schemas skills/ancient-cities-modding/scripts tests examples
+        run: python -m ruff format --check src schemas skills/ancient-cities-modding/scripts tests examples tools/blender
 
       - name: Lint
-        run: python -m ruff check src schemas skills/ancient-cities-modding/scripts tests examples
+        run: python -m ruff check src schemas skills/ancient-cities-modding/scripts tests examples tools/blender
 
       - name: Type-check public SDK
         run: python -m mypy --strict src/acmk
@@ -76,7 +76,7 @@ jobs:
         run: python -m pip install --upgrade --editable ".[test]"
 
       - name: Compile Python sources
-        run: python -m compileall -q src schemas skills/ancient-cities-modding/scripts tests examples
+        run: python -m compileall -q src schemas skills/ancient-cities-modding/scripts tests examples tools/blender
 
       - name: Run tests
         run: python -m pytest

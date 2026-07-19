@@ -1,0 +1,172 @@
+{
+  "ai_assistance": "Generator design and documentation were AI-assisted; geometry is original",
+  "asset_id": "starter_resource",
+  "authoring_example": true,
+  "blender": {
+    "build_hash": "fbe6228777e7",
+    "version": "5.2.0 LTS"
+  },
+  "category": "resource",
+  "contains_game_or_workshop_assets": false,
+  "creation_method": "Procedurally generated from original primitive geometry",
+  "exports": [
+    "exports/Resource.fbx",
+    "exports/Heap_LOD0.fbx",
+    "exports/Heap_LOD1.fbx",
+    "exports/PileContent.fbx",
+    "exports/Load_Human.fbx"
+  ],
+  "fbx": {
+    "axis_forward": "-Z",
+    "axis_up": "Y",
+    "binary": true,
+    "embedded_textures": false,
+    "triangulated": true
+  },
+  "license": "MIT",
+  "limitations": [
+    "This is an authoring example, not a complete Ancient Cities mod.",
+    "The running v1.9.3 game and Log.txt remain the final compatibility test."
+  ],
+  "objects": [
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          0.19,
+          0.14,
+          0.24
+        ],
+        "min": [
+          -0.19,
+          -0.14,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "Resource",
+      "transform_identity": true,
+      "triangles": 8,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 6
+    },
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          0.576961,
+          0.459784,
+          0.378071
+        ],
+        "min": [
+          -0.67,
+          -0.550637,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "Heap_LOD0",
+      "transform_identity": true,
+      "triangles": 72,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 54
+    },
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          0.365895,
+          0.426354,
+          0.238286
+        ],
+        "min": [
+          -0.64,
+          -0.471975,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "Heap_LOD1",
+      "transform_identity": true,
+      "triangles": 40,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 30
+    },
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          0.333251,
+          0.277512,
+          0.462964
+        ],
+        "min": [
+          -0.41,
+          -0.310637,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "PileContent",
+      "transform_identity": true,
+      "triangles": 40,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 30
+    },
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          0.293251,
+          0.14,
+          0.369354
+        ],
+        "min": [
+          -0.31,
+          -0.14,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "Load_Human",
+      "transform_identity": true,
+      "triangles": 24,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 18
+    }
+  ],
+  "rgba_mode": "ColorVSplit",
+  "runtime_tested": false,
+  "scene": {
+    "scale_length": 1.0,
+    "source_up_axis": "Z",
+    "unit_system": "METRIC"
+  },
+  "schema_version": 1,
+  "textures": [
+    "textures/C.tga",
+    "textures/N.tga",
+    "textures/T.tga",
+    "textures/O.tga"
+  ]
+}

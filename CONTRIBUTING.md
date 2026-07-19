@@ -22,8 +22,8 @@ repository's MIT License.
 py -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
-python -m ruff format --check src schemas skills/ancient-cities-modding/scripts tests examples
-python -m ruff check src schemas skills/ancient-cities-modding/scripts tests examples
+python -m ruff format --check src schemas skills/ancient-cities-modding/scripts tests examples tools/blender
+python -m ruff check src schemas skills/ancient-cities-modding/scripts tests examples tools/blender
 python -m mypy --strict src/acmk
 python -m pytest
 ```
@@ -33,6 +33,17 @@ UTF-8 unless a fixture specifically models a game-facing UTF-16LE file. Such fix
 must be synthetic, minimal, and documented. Do not silently re-encode game-facing
 files; preserve their UTF-16LE form and byte-order marker when the documented format
 requires one.
+
+Model contributions must follow [`modeling/README.md`](modeling/README.md), use the exact
+checksum-pinned Blender toolchain, update provenance/reports/previews/checksums, and pass:
+
+```powershell
+blender --background --factory-startup --disable-autoexec --python-exit-code 1 `
+  --python tools/blender/validate_models.py
+```
+
+Keep `runtime_tested = false` unless an authorized isolated test against the recorded game
+build and a relevant sanitized `Log.txt` review have actually been completed.
 
 ## Making a change
 

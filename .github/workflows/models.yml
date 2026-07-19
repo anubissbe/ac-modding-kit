@@ -1,0 +1,100 @@
+name: Model assets
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/models.yml"
+      - ".gitattributes"
+      - ".gitignore"
+      - "modeling/**"
+      - "tests/test_model_assets.py"
+      - "tools/blender/**"
+  pull_request:
+    paths:
+      - ".github/workflows/models.yml"
+      - ".gitattributes"
+      - ".gitignore"
+      - "modeling/**"
+      - "tests/test_model_assets.py"
+      - "tools/blender/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: models-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-model-contracts:
+    name: Static model contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade --editable ".[test]"
+
+      - name: Validate static model contracts
+        env:
+          ACMK_REQUIRE_MODEL_OUTPUTS: "1"
+        run: python -m pytest tests/test_model_assets.py
+
+  blender-semantics:
+    name: Blender semantic validation
+    needs:
+      - static-model-contracts
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Download and verify pinned Blender
+        shell: pwsh
+        run: |
+          $lock = Get-Content -Raw -LiteralPath "modeling/toolchain.lock.json" | ConvertFrom-Json
+          if ($lock.blender.platform -ne "windows-x64") {
+            throw "The semantic workflow requires the pinned windows-x64 Blender archive."
+          }
+          $archivePath = Join-Path $env:RUNNER_TEMP $lock.blender.archive
+          $extractPath = Join-Path $env:RUNNER_TEMP "acmk-blender"
+          Invoke-WebRequest -Uri $lock.blender.url -OutFile $archivePath
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
+          if ($actual -ne $lock.blender.sha256) {
+            throw "Blender SHA-256 mismatch: expected $($lock.blender.sha256), got $actual"
+          }
+          Expand-Archive -LiteralPath $archivePath -DestinationPath $extractPath
+          $executable = Get-ChildItem -LiteralPath $extractPath -Filter "blender.exe" -File -Recurse |
+            Select-Object -First 1
+          if ($null -eq $executable) {
+            throw "The verified Blender archive did not contain blender.exe."
+          }
+          "BLENDER_EXE=$($executable.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Open and validate every Blender and FBX model
+        shell: pwsh
+        run: |
+          & $env:BLENDER_EXE --background --factory-startup --disable-autoexec `
+            --python-exit-code 1 --python "tools/blender/validate_models.py"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Blender semantic validation failed with exit code $LASTEXITCODE."
+          }

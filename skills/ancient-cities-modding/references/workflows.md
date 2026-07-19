@@ -39,6 +39,14 @@ Use installed StarCarr (`2175125663`) for a small landmark concept, Phyllitis (`
 3. Keep source authoring files outside `Ancient/`; package only runtime assets.
 4. Use image generation only for original visual bases and record that provenance. Do not imitate or reconstruct proprietary game art.
 5. For FBX creation or animation, require Blender/equivalent or a user-supplied validated model. Header checks alone do not prove that the game can render it.
+6. When an `ac-modding-kit` checkout contains `modeling/toolchain.lock.json`, use that exact
+   checksum-pinned Blender build and treat `modeling/assets/` only as original authoring
+   examples. Run both the static model tests and `tools/blender/validate_models.py`.
+7. Keep source scenes Z-up and metres-based with applied transforms; export binary,
+   triangulated FBX with explicit Y-up conversion, usable UVs, and the documented vertex
+   RGBA mode. Record source and export axes separately.
+8. Keep model claims at authoring-only/runtime-unverified until an explicitly authorized
+   isolated game test and relevant `Log.txt` review succeed.
 
 ## Validation and test deployment
 

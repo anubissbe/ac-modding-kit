@@ -1,0 +1,198 @@
+{
+  "ai_assistance": "Generator design and documentation were AI-assisted; geometry is original",
+  "asset_id": "starter_shelter",
+  "authoring_example": true,
+  "blender": {
+    "build_hash": "fbe6228777e7",
+    "version": "5.2.0 LTS"
+  },
+  "category": "building",
+  "contains_game_or_workshop_assets": false,
+  "creation_method": "Procedurally generated from original primitive geometry",
+  "exports": [
+    "exports/StarterBuilding_Build_00.fbx",
+    "exports/StarterBuilding_Default.fbx",
+    "exports/StarterBuilding_Decay_00.fbx",
+    "exports/StarterBuilding_Collider.fbx",
+    "exports/StarterBuilding_Dark.fbx",
+    "exports/StarterBuilding_Blueprint.fbx"
+  ],
+  "fbx": {
+    "axis_forward": "-Z",
+    "axis_up": "Y",
+    "binary": true,
+    "embedded_textures": false,
+    "triangulated": true
+  },
+  "license": "MIT",
+  "limitations": [
+    "This is an authoring example, not a complete Ancient Cities mod.",
+    "The running v1.9.3 game and Log.txt remain the final compatibility test."
+  ],
+  "objects": [
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          1.75,
+          1.13,
+          1.68
+        ],
+        "min": [
+          -1.75,
+          -1.13,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "StarterBuilding_Build_00",
+      "transform_identity": true,
+      "triangles": 256,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 144
+    },
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          1.8,
+          1.348967,
+          2.232873
+        ],
+        "min": [
+          -1.8,
+          -1.348967,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "StarterBuilding_Default",
+      "transform_identity": true,
+      "triangles": 264,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 156
+    },
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          1.8,
+          1.125,
+          2.232873
+        ],
+        "min": [
+          -1.8,
+          -1.348967,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "StarterBuilding_Decay_00",
+      "transform_identity": true,
+      "triangles": 152,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 88
+    },
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          1.7,
+          1.075,
+          2.2
+        ],
+        "min": [
+          -1.7,
+          -1.075,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "StarterBuilding_Collider",
+      "transform_identity": true,
+      "triangles": 12,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 8
+    },
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          1.6,
+          1.0,
+          0.08
+        ],
+        "min": [
+          -1.6,
+          -1.0,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "StarterBuilding_Dark",
+      "transform_identity": true,
+      "triangles": 12,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 8
+    },
+    {
+      "all_faces_triangles": true,
+      "bounds_m": {
+        "max": [
+          1.8,
+          1.2,
+          0.05
+        ],
+        "min": [
+          -1.8,
+          -1.2,
+          0.0
+        ]
+      },
+      "color_attributes": [
+        "Color"
+      ],
+      "name": "StarterBuilding_Blueprint",
+      "transform_identity": true,
+      "triangles": 12,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "vertices": 8
+    }
+  ],
+  "rgba_mode": null,
+  "runtime_tested": false,
+  "scene": {
+    "scale_length": 1.0,
+    "source_up_axis": "Z",
+    "unit_system": "METRIC"
+  },
+  "schema_version": 1,
+  "textures": [
+    "textures/C.tga",
+    "textures/N.tga",
+    "textures/T.tga",
+    "textures/O.tga"
+  ]
+}
