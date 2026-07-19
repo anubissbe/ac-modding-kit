@@ -708,6 +708,7 @@ class CliContractTests(unittest.TestCase):
         payload = json.loads(output.getvalue())
         self.assertEqual(exit_code, 0)
         self.assertNotIn("schema_version", payload)
+        self.assertNotIn("issues", payload)
         self.assertFalse(payload["publishes_workshop_items"])
 
     def test_default_error_output_is_unwrapped_pretty_json(self) -> None:
