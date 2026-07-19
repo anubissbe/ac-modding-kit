@@ -172,6 +172,16 @@ def test_toolchain_is_exactly_pinned() -> None:
     }
 
 
+def test_every_asset_manifest_is_registered() -> None:
+    discovered = {path.parent.resolve() for path in MODELING_ROOT.glob("assets/*/*/asset.toml")}
+    registered = {path.resolve() for path in ASSETS.values()}
+    assert discovered == registered, (
+        "every modeling/assets/*/*/asset.toml directory must be registered in ASSETS; "
+        f"missing={sorted(str(path) for path in discovered - registered)}, "
+        f"stale={sorted(str(path) for path in registered - discovered)}"
+    )
+
+
 @pytest.mark.parametrize(("category", "asset_dir"), ASSETS.items())
 def test_asset_manifest_contract(category: str, asset_dir: Path) -> None:
     manifest = load_manifest(asset_dir)

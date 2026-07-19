@@ -85,6 +85,19 @@ def fail(message: str) -> None:
     raise AssertionError(message)
 
 
+def assert_every_asset_manifest_is_registered() -> None:
+    discovered = {
+        path.parent.relative_to(ASSET_ROOT).as_posix() for path in ASSET_ROOT.glob("*/*/asset.toml")
+    }
+    registered = {f"{contract.category}/{contract.asset_id}" for contract in CONTRACTS}
+    if discovered != registered:
+        fail(
+            "every modeling/assets/*/*/asset.toml directory must have a semantic "
+            f"AssetContract; missing={sorted(discovered - registered)}, "
+            f"stale={sorted(registered - discovered)}"
+        )
+
+
 def scene_meshes() -> list[bpy.types.Object]:
     return sorted(
         (obj for obj in bpy.context.scene.objects if obj.type == "MESH"), key=lambda obj: obj.name
@@ -311,6 +324,7 @@ def assert_fbx_round_trip(contract: AssetContract) -> None:
 def main() -> None:
     if tuple(bpy.app.version) != EXPECTED_BLENDER:
         fail(f"expected Blender {EXPECTED_BLENDER}, got {tuple(bpy.app.version)}")
+    assert_every_asset_manifest_is_registered()
     for contract in CONTRACTS:
         source_objects = assert_clean_source_scene(contract)
         assert_category_semantics(contract, source_objects)

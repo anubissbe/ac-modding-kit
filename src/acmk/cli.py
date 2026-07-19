@@ -179,7 +179,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             else {"code": "LEGACY_ERROR", "message": str(exc)}
         )
         payload = envelope(_command_label(args), {}, ok=False, issues=(issue,))
-        _emit(payload, json_mode=args.json)
+        _emit(payload if args.json else issue, json_mode=args.json)
         return 1
     payload = envelope(_command_label(args), data, ok=ok)
     _emit(payload if args.json else data, json_mode=args.json)

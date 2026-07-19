@@ -130,6 +130,11 @@ unexpected objects, embedded scripts, linked libraries, unapplied source transfo
 invalid LOD relationships, degenerate UV triangles, and incorrect vertex-RGBA semantics.
 It also imports every FBX back into a clean Blender scene.
 
+Every new `modeling/assets/<category>/<asset>/asset.toml` directory must also be registered
+in `ASSETS` in `tests/test_model_assets.py` and `CONTRACTS` in
+`tools/blender/validate_models.py`. Both validators reject unregistered or stale entries so
+a new community asset cannot silently bypass either validation layer.
+
 Geometry and metadata generation are repeatable with the pinned toolchain, but Blender adds
 an FBX creation timestamp and file identifier. Regenerated FBX and checksum bytes are
 therefore not promised to be identical. Regenerate intentionally and review semantic reports

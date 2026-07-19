@@ -41,6 +41,11 @@ practical.
 - Reject ambiguous manifest mutation, unsafe root casing, engine-reference confusion,
   payload-root symlinks, build-output collisions, and non-empty initialization targets.
 
+### Fixed
+
+- Keep default SDK CLI errors as unwrapped pretty JSON; reserve versioned envelopes for
+  explicit `--json` output.
+
 ## 0.1.0 - 2026-07-19
 
 ### Added
