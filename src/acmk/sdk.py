@@ -11,11 +11,12 @@ from typing import Any
 import ancient_cities_mod as _legacy
 
 from .builder import DraftProjectBuilder
+from .building import BuildingScaffoldBuilder, BuildingSpec
 from .config import ProvenanceStatus
 from .doctor import run_doctor
 from .errors import ACMKError
 from .manifest import ManifestSpec
-from .project import ProjectImporter, ProjectImportPlan, SDKProject
+from .project import ObservedConsensusPlan, ProjectImporter, ProjectImportPlan, SDKProject
 from .reports import DiscoverySnapshot, DoctorReport, ValidationProfile, ValidationReport
 
 
@@ -94,6 +95,13 @@ class AncientCitiesSDK:
             context_refresher=lambda: self.context(refresh=True),
         )
 
+    def plan_observed_consensus(
+        self, root: str | os.PathLike[str], *, refresh: bool = False
+    ) -> ObservedConsensusPlan:
+        """Plan an evidence-backed reconciliation for one supported exact game build."""
+
+        return self.open_project(root, refresh=refresh).plan_observed_consensus()
+
     def draft_builder(
         self,
         target: str | os.PathLike[str],
@@ -103,6 +111,8 @@ class AncientCitiesSDK:
         version: str = "0.1.0",
         license: str = "NOASSERTION",
         contact: str = "",
+        dependencies: Sequence[str] = (),
+        conflicts: Sequence[str] = (),
     ) -> DraftProjectBuilder:
         """Create a noncanonical draft builder with live context rechecks on apply."""
 
@@ -110,6 +120,33 @@ class AncientCitiesSDK:
             target,
             identifier=identifier,
             manifest=manifest,
+            context=self.context(),
+            version=version,
+            license=license,
+            contact=contact,
+            dependencies=dependencies,
+            conflicts=conflicts,
+            context_refresher=lambda: self.context(refresh=True),
+        )
+
+    def standalone_building_builder(
+        self,
+        target: str | os.PathLike[str],
+        *,
+        project_identifier: str,
+        manifest: ManifestSpec,
+        building: BuildingSpec,
+        version: str = "0.1.0",
+        license: str = "NOASSERTION",
+        contact: str = "",
+    ) -> BuildingScaffoldBuilder:
+        """Create a dry-run-first, explicitly noncanonical building scaffold."""
+
+        return BuildingScaffoldBuilder(
+            target,
+            project_identifier=project_identifier,
+            manifest=manifest,
+            building=building,
             context=self.context(),
             version=version,
             license=license,

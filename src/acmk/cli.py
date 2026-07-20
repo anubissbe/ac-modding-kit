@@ -100,6 +100,13 @@ def build_parser() -> argparse.ArgumentParser:
     project_configure.add_argument("--provenance-notes")
     project_configure.add_argument("--apply", action="store_true")
 
+    project_consensus = project_sub.add_parser(
+        "reconcile-consensus",
+        help=("reconcile or refresh a Generic project with an audited exact-build profile"),
+    )
+    project_consensus.add_argument("root")
+    project_consensus.add_argument("--apply", action="store_true")
+
     project_check = project_sub.add_parser("check", help="validate an authoring or release profile")
     project_check.add_argument("root")
     project_check.add_argument(
@@ -123,6 +130,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     project_test.add_argument("root")
     project_test.add_argument("--log", required=True)
+    project_test.add_argument(
+        "--baseline-log",
+        help=(
+            "optional pre-candidate clean-launch log; exact recurring warning lines are "
+            "ignored, while new warnings and all runtime errors remain blocking"
+        ),
+    )
     project_test.add_argument("--result", choices=("passed", "failed"), required=True)
     project_test.add_argument(
         "--save-impact",
@@ -263,12 +277,17 @@ def _dispatch(args: argparse.Namespace, sdk: AncientCitiesSDK) -> tuple[Mapping[
             )
             config_result = config_plan.apply() if args.apply else config_plan.preview()
             return config_result.to_dict(), True
+        if args.project_command == "reconcile-consensus":
+            consensus_plan = project.plan_observed_consensus()
+            consensus_result = consensus_plan.apply() if args.apply else consensus_plan.preview()
+            return consensus_result.to_dict(), True
         if args.project_command == "check":
             validation_report = project.validate(ValidationProfile(args.profile))
             return validation_report.to_dict(), validation_report.valid
         if args.project_command == "record-test":
             test_plan = project.plan_runtime_test(
                 args.log,
+                baseline_log_path=args.baseline_log,
                 passed=args.result == "passed",
                 save_impact=SaveImpact(args.save_impact),
                 achievement_impact=AchievementImpact(args.achievement_impact),

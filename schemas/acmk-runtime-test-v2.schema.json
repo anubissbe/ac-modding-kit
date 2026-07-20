@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/anubissbe/ac-modding-kit/main/schemas/acmk-runtime-test-v2.schema.json",
+  "title": "ACMK sanitized runtime-test evidence v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "recorded_at",
+    "runtime_status",
+    "compatibility",
+    "log_sha256",
+    "log_summary",
+    "source_fingerprint",
+    "environment",
+    "warning_baseline"
+  ],
+  "properties": {
+    "schema_version": {"const": 2},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "runtime_status": {"enum": ["passed", "failed"]},
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["game_version", "game_semver", "steam_build_id", "content_hash"],
+      "properties": {
+        "game_version": {"type": "string", "pattern": "^[0-9]+$"},
+        "game_semver": {"type": "string", "minLength": 1},
+        "steam_build_id": {"type": "string", "pattern": "^[0-9]+$"},
+        "content_hash": {"type": "string", "pattern": "^[0-9A-Fa-f]+$"}
+      }
+    },
+    "log_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "log_summary": {"$ref": "#/$defs/logSummary"},
+    "warning_baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "log_sha256",
+        "log_summary",
+        "ignored_warnings",
+        "unmatched_warnings"
+      ],
+      "properties": {
+        "algorithm": {"const": "normalized-warning-line-multiset-v1"},
+        "log_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "log_summary": {"$ref": "#/$defs/logSummary"},
+        "ignored_warnings": {"type": "integer", "minimum": 0},
+        "unmatched_warnings": {"type": "integer", "minimum": 0}
+      }
+    },
+    "source_fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "sha256", "files", "bytes"],
+      "properties": {
+        "algorithm": {"const": "sha256-tree-v1"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "files": {"type": "integer", "minimum": 0},
+        "bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operating_system",
+        "toolkit_version",
+        "clean_launch",
+        "save_type",
+        "tested_mod",
+        "observed_game_semver"
+      ],
+      "properties": {
+        "operating_system": {"type": "string", "minLength": 1},
+        "toolkit_version": {"type": "string", "minLength": 1},
+        "clean_launch": {"type": "boolean"},
+        "save_type": {"enum": ["new-disposable", "existing-disposable", "no-save"]},
+        "tested_mod": {"type": "string"},
+        "observed_game_semver": {"type": "string"}
+      }
+    }
+  },
+  "$defs": {
+    "logSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lines", "warnings", "errors_or_failures", "mods_enabled"],
+      "properties": {
+        "lines": {"type": "integer", "minimum": 0},
+        "warnings": {"type": "integer", "minimum": 0},
+        "errors_or_failures": {"type": "integer", "minimum": 0},
+        "mods_enabled": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"runtime_status": {"const": "passed"}},
+        "required": ["runtime_status"]
+      },
+      "then": {
+        "properties": {
+          "log_summary": {
+            "properties": {"errors_or_failures": {"const": 0}}
+          },
+          "warning_baseline": {
+            "properties": {"unmatched_warnings": {"const": 0}}
+          },
+          "environment": {
+            "properties": {
+              "clean_launch": {"const": true},
+              "tested_mod": {"type": "string", "minLength": 1},
+              "observed_game_semver": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

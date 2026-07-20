@@ -584,9 +584,25 @@ class ConflictBuildAndMetadataTests(SyntheticTempTestCase):
         self.assertEqual(ac.manifest_fields(changed)[0]["Type"], "Generic")
 
     def test_canonical_manifest_includes_content(self) -> None:
-        fields, _, _ = ac.manifest_fields(valid_manifest())
+        text = valid_manifest()
+        fields, _, _ = ac.manifest_fields(text)
         self.assertIn("Content", fields)
         self.assertEqual(fields["Content"], "")
+        content_block = text.split('Name:"Content"', 1)[1].split("}", 1)[0]
+        self.assertNotIn("Value:", content_block)
+
+    def test_canonical_manifest_can_render_explicit_content_value(self) -> None:
+        text = ac.canonical_manifest(
+            title="Synthetic",
+            description="Synthetic description",
+            changelog="Initial",
+            game_version="22",
+            mod_type="Generic",
+            steam_mod_id="0,0",
+            content="Explicit content",
+        )
+        content_block = text.split('Name:"Content"', 1)[1].split("}", 1)[0]
+        self.assertIn('Value:"Explicit content"', content_block)
 
     def test_initialise_project_is_dry_run_first(self) -> None:
         project = self.root / "new-project"

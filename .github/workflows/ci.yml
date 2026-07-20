@@ -112,7 +112,8 @@ jobs:
           python -I -c "import acmk; import acmk.knowledge_data; import acmk.schemas; import ancient_cities_mod"
           python -I -c "from importlib.resources import files; assert files('acmk').joinpath('py.typed').is_file()"
           python -I -c "from importlib.resources import files; assert len(tuple(files('acmk.knowledge_data').glob('*.md'))) == 5"
-          python -I -c "from importlib.resources import files; assert {path.name for path in files('acmk.schemas').glob('*.json')} == {'acmk-project-v1.schema.json', 'acmk-report-envelope-v1.schema.json', 'acmk-runtime-test-v1.schema.json'}"
+          python -I -c "from importlib.resources import files; assert {path.name for path in files('acmk.schemas').glob('*.json')} == {'acmk-project-v1.schema.json', 'acmk-report-envelope-v1.schema.json', 'acmk-runtime-test-v1.schema.json', 'acmk-runtime-test-v2.schema.json'}"
+          python -I -c "from acmk import BuildingSpec, BuildingScaffoldBuilder; assert BuildingSpec and BuildingScaffoldBuilder"
           python -I -m acmk --help
           acmk --help
           acmk self-test

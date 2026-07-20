@@ -29,14 +29,15 @@ Loose local development uses the same root metadata/preview plus an `Ancient\...
 Current manifests use UTF-16LE with BOM and normally contain:
 
 - `Changelog` (`String`)
-- `Content` (`String`, often empty; language mods point at their language node)
+- `Content` (`String`; current Generic manifests use the node without a `Value` line,
+  while language mods may point at their language node)
 - `Description` (`String`)
 - `GameVersion` (`String`; internal revision such as `22`, not semantic version `1.9.3`)
 - `SteamModId` (`U32x2`; use `0,0` before first publication)
 - `Title` (`String`)
 - `Type` (`String`)
 
-Legacy manifests may also contain `Date`, `Enabled`, or `Version`. Preserve unknown valid nodes. Observed type values are `Generic`, `Language`, `Landmark`, `Plant`, `Cheat`, and `Texture`; prefer `Generic` unless a current game-generated skeleton specifies another type.
+Legacy manifests may also contain `Date`, `Enabled`, or `Version`. Preserve unknown valid nodes. Observed type values are `Generic`, `Language`, `Landmark`, `Plant`, `Cheat`, and `Texture`; prefer `Generic` unless a current game-generated skeleton or supported exact-build consensus profile specifies another type.
 
 The game explicitly validates presence of Title, Description, Changelog, and GameVersion. Keep all standard nodes and give Title, Description, GameVersion, and Type non-empty values. Use a meaningful Changelog even though some older published examples left its value empty.
 
