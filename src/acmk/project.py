@@ -9,6 +9,7 @@ import platform
 import re
 import shutil
 import tempfile
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -33,6 +34,18 @@ from .config import (
 from .errors import ContractError, ProjectError, SourceChangedError, ValidationFailedError
 from .manifest import ManifestDocument
 from .reports import ExecutionMode, Issue, Severity, ValidationProfile, ValidationReport
+
+_LEGACY_RUNTIME_TEST_SCHEMA_VERSION = 1
+_WARNING_BASELINE_ALGORITHM = "normalized-warning-line-multiset-v1"
+_OBSERVED_CONSENSUS_IMPORT_SCHEMA_VERSION = 2
+_OBSERVED_CONSENSUS_PROFILES = {
+    (
+        "22",
+        "1.9.3",
+        "23915225",
+        "D9BF481D195671BF9CB98274B4CFF604",
+    ): "generic-gv22-b23915225-v1",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +192,40 @@ class SourceFingerprint:
             "sha256": self.sha256,
             "files": self.files,
             "bytes": self.bytes,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class _WarningBaseline:
+    """Immutable plan-time evidence for warning-only baseline subtraction."""
+
+    log_path: Path
+    log_size: int
+    log_sha256: str
+    log_summary: Mapping[str, Any]
+    ignored_warnings: int
+    unmatched_warnings: int
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "log_summary", MappingProxyType(dict(self.log_summary)))
+        if not isinstance(self.log_path, Path):
+            raise ContractError("warning baseline path must be a pathlib.Path")
+        if not _nonnegative_int(self.log_size):
+            raise ContractError("warning baseline size must be a non-negative integer")
+        if not _valid_sha256(self.log_sha256):
+            raise ContractError("warning baseline must contain a lowercase SHA-256 digest")
+        if not _nonnegative_int(self.ignored_warnings) or not _nonnegative_int(
+            self.unmatched_warnings
+        ):
+            raise ContractError("warning baseline counts must be non-negative integers")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "algorithm": _WARNING_BASELINE_ALGORITHM,
+            "log_sha256": self.log_sha256,
+            "log_summary": dict(self.log_summary),
+            "ignored_warnings": self.ignored_warnings,
+            "unmatched_warnings": self.unmatched_warnings,
         }
 
 
@@ -533,12 +580,23 @@ class RuntimeTestResult:
     record_path: Path
     config_backup: Path | None
     record_backup: Path | None
+    warning_baseline: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "log_summary", MappingProxyType(dict(self.log_summary)))
+        if self.warning_baseline is not None:
+            warning_baseline = dict(self.warning_baseline)
+            baseline_summary = warning_baseline.get("log_summary")
+            if isinstance(baseline_summary, Mapping):
+                warning_baseline["log_summary"] = MappingProxyType(dict(baseline_summary))
+            object.__setattr__(
+                self,
+                "warning_baseline",
+                MappingProxyType(warning_baseline),
+            )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "mode": self.mode.value,
             "project_root": str(self.project_root),
             "runtime_status": self.status.value,
@@ -557,6 +615,13 @@ class RuntimeTestResult:
             "config_backup": str(self.config_backup) if self.config_backup else None,
             "record_backup": str(self.record_backup) if self.record_backup else None,
         }
+        if self.warning_baseline is not None:
+            warning_baseline = dict(self.warning_baseline)
+            baseline_summary = warning_baseline.get("log_summary")
+            if isinstance(baseline_summary, Mapping):
+                warning_baseline["log_summary"] = dict(baseline_summary)
+            result["warning_baseline"] = warning_baseline
+        return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -631,6 +696,211 @@ class ProjectConfigPlan:
 
 
 @dataclass(frozen=True, slots=True)
+class ObservedConsensusResult:
+    mode: ExecutionMode
+    project_root: Path
+    profile: str
+    manifest_sha256: str
+    runtime_reset: bool
+    evidence_path: Path
+    config_backup: Path | None
+    manifest_backup: Path | None
+    evidence_backup: Path | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "mode": self.mode.value,
+            "project_root": str(self.project_root),
+            "source": SkeletonSource.OBSERVED_CONSENSUS.value,
+            "profile": self.profile,
+            "manifest_sha256": self.manifest_sha256,
+            "runtime_reset": self.runtime_reset,
+            "evidence_path": str(self.evidence_path),
+            "config_backup": str(self.config_backup) if self.config_backup else None,
+            "manifest_backup": str(self.manifest_backup) if self.manifest_backup else None,
+            "evidence_backup": str(self.evidence_backup) if self.evidence_backup else None,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ObservedConsensusPlan:
+    """Reconcile a Generic community draft with one audited, build-specific profile."""
+
+    project: SDKProject
+    updated_config: ProjectConfig
+    manifest_bytes: bytes
+    evidence_bytes: bytes
+    profile: str
+    original_config_sha256: str
+    original_manifest_sha256: str
+    original_evidence_sha256: str | None
+
+    @property
+    def evidence_path(self) -> Path:
+        return self.project.layout.state_root / "import.json"
+
+    def preview(self) -> ObservedConsensusResult:
+        self._validate()
+        return self._result(ExecutionMode.DRY_RUN, None, None, None)
+
+    def apply(self) -> ObservedConsensusResult:
+        self._validate()
+        layout = self.project.layout
+        live_context = self.project._refresh_context()
+        for path in (layout.config_path, layout.manifest, self.evidence_path):
+            _legacy.assert_no_symlink_components(path)
+            _legacy.assert_writable_project_path(path, live_context)
+        layout.state_root.mkdir(parents=True, exist_ok=True)
+        original_config = _read_bounded(layout.config_path, MAX_PROJECT_CONFIG_BYTES)
+        original_manifest = _read_bounded(layout.manifest, _legacy.MAX_TEXT_ASSET_BYTES)
+        original_evidence = (
+            _read_bounded(self.evidence_path, _legacy.MAX_TEXT_ASSET_BYTES)
+            if self.evidence_path.exists()
+            else None
+        )
+        self._assert_snapshots(original_config, original_manifest, original_evidence)
+        config_bytes = self.updated_config.to_toml().encode("utf-8")
+        backup_root = layout.state_root / "backups"
+        config_backup = _create_state_backup(
+            layout.config_path,
+            original_config,
+            backup_root,
+            boundary=layout.state_root,
+        )
+        manifest_backup = _create_state_backup(
+            layout.manifest,
+            original_manifest,
+            backup_root,
+            boundary=layout.state_root,
+        )
+        evidence_backup = (
+            _legacy._create_backup(self.evidence_path) if original_evidence is not None else None
+        )
+        self._assert_snapshots(
+            _read_bounded(layout.config_path, MAX_PROJECT_CONFIG_BYTES),
+            _read_bounded(layout.manifest, _legacy.MAX_TEXT_ASSET_BYTES),
+            (
+                _read_bounded(self.evidence_path, _legacy.MAX_TEXT_ASSET_BYTES)
+                if self.evidence_path.exists()
+                else None
+            ),
+        )
+        try:
+            _legacy._atomic_write(self.evidence_path, self.evidence_bytes)
+            _legacy._atomic_write(layout.manifest, self.manifest_bytes)
+            _legacy._atomic_write(layout.config_path, config_bytes)
+        except BaseException as exc:
+            rollback_errors = _rollback_files(
+                (
+                    ("acmk.toml", layout.config_path, original_config, config_bytes),
+                    ("Index.art", layout.manifest, original_manifest, self.manifest_bytes),
+                    (
+                        "import.json",
+                        self.evidence_path,
+                        original_evidence,
+                        self.evidence_bytes,
+                    ),
+                )
+            )
+            if rollback_errors:
+                raise ProjectError(
+                    "consensus reconciliation failed and rollback was incomplete: "
+                    + "; ".join(rollback_errors),
+                    path=layout.root,
+                ) from exc
+            raise
+        return self._result(
+            ExecutionMode.APPLY,
+            config_backup,
+            manifest_backup,
+            evidence_backup,
+        )
+
+    def _validate(self) -> None:
+        self.project._assert_config_unchanged()
+        if self.original_config_sha256 != self.project._opened_config_sha256:
+            raise ContractError("consensus plan has an invalid configuration snapshot")
+        if self.project.config.skeleton not in {
+            SkeletonSource.COMMUNITY_DRAFT,
+            SkeletonSource.OBSERVED_CONSENSUS,
+        }:
+            raise ContractError(
+                "only a community-draft or observed-consensus project can be reconciled"
+            )
+        expected_profile = _observed_consensus_profile(self.project.config.compatibility)
+        if expected_profile is None or self.profile != expected_profile:
+            raise ContractError("consensus plan uses an unsupported compatibility profile")
+        current_context = self.project._refresh_context()
+        _assert_context_matches(current_context, self.project.config.compatibility)
+        expected_config = replace(
+            self.project.config,
+            skeleton=SkeletonSource.OBSERVED_CONSENSUS,
+            runtime_status=RuntimeStatus.UNTESTED,
+        )
+        if self.updated_config != expected_config:
+            raise ContractError("consensus plan contains unauthorized configuration changes")
+        original_config = _read_bounded(self.project.layout.config_path, MAX_PROJECT_CONFIG_BYTES)
+        original_manifest = _read_bounded(
+            self.project.layout.manifest, _legacy.MAX_TEXT_ASSET_BYTES
+        )
+        original_evidence = (
+            _read_bounded(self.evidence_path, _legacy.MAX_TEXT_ASSET_BYTES)
+            if self.evidence_path.exists()
+            else None
+        )
+        self._assert_snapshots(original_config, original_manifest, original_evidence)
+        expected_manifest = _reconciled_observed_consensus_manifest(
+            ManifestDocument.from_bytes(original_manifest),
+            self.profile,
+            preserve_canonical=(self.project.config.skeleton is SkeletonSource.OBSERVED_CONSENSUS),
+        )
+        if self.manifest_bytes != expected_manifest:
+            raise ContractError("consensus plan manifest differs from the audited profile")
+        expected_evidence = _observed_consensus_evidence_bytes(
+            self.updated_config,
+            self.profile,
+            hashlib.sha256(self.manifest_bytes).hexdigest(),
+        )
+        if self.evidence_bytes != expected_evidence:
+            raise ContractError("consensus plan evidence differs from the canonical record")
+
+    def _assert_snapshots(
+        self,
+        config_bytes: bytes,
+        manifest_bytes: bytes,
+        evidence_bytes: bytes | None,
+    ) -> None:
+        if hashlib.sha256(config_bytes).hexdigest() != self.original_config_sha256:
+            raise SourceChangedError("acmk.toml changed after consensus planning")
+        if hashlib.sha256(manifest_bytes).hexdigest() != self.original_manifest_sha256:
+            raise SourceChangedError("Index.art changed after consensus planning")
+        evidence_sha256 = (
+            hashlib.sha256(evidence_bytes).hexdigest() if evidence_bytes is not None else None
+        )
+        if evidence_sha256 != self.original_evidence_sha256:
+            raise SourceChangedError("import.json changed after consensus planning")
+
+    def _result(
+        self,
+        mode: ExecutionMode,
+        config_backup: Path | None,
+        manifest_backup: Path | None,
+        evidence_backup: Path | None,
+    ) -> ObservedConsensusResult:
+        return ObservedConsensusResult(
+            mode=mode,
+            project_root=self.project.layout.root,
+            profile=self.profile,
+            manifest_sha256=hashlib.sha256(self.manifest_bytes).hexdigest(),
+            runtime_reset=self.project.config.runtime_status is not RuntimeStatus.UNTESTED,
+            evidence_path=self.evidence_path,
+            config_backup=config_backup,
+            manifest_backup=manifest_backup,
+            evidence_backup=evidence_backup,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeTestPlan:
     project: SDKProject
     updated_config: ProjectConfig
@@ -647,6 +917,7 @@ class RuntimeTestPlan:
     tested_mod: str
     observed_game_semver: str
     recorded_at: str
+    warning_baseline: _WarningBaseline | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "log_summary", MappingProxyType(dict(self.log_summary)))
@@ -673,6 +944,9 @@ class RuntimeTestPlan:
             self.record_path,
             None,
             None,
+            warning_baseline=(
+                self.warning_baseline.to_dict() if self.warning_baseline is not None else None
+            ),
         )
 
     def apply(self) -> RuntimeTestResult:
@@ -753,6 +1027,9 @@ class RuntimeTestPlan:
             self.record_path,
             config_backup,
             record_backup,
+            warning_baseline=(
+                self.warning_baseline.to_dict() if self.warning_baseline is not None else None
+            ),
         )
 
     def _validated_record(self) -> dict[str, Any]:
@@ -797,6 +1074,46 @@ class RuntimeTestPlan:
         )
         if summary != dict(self.log_summary):
             raise ContractError("runtime-test summary does not match the recorded log")
+        unmatched_warnings: int | None = None
+        if self.warning_baseline is not None:
+            baseline = self.warning_baseline
+            if baseline.log_path == self.log_path or _is_within(
+                baseline.log_path, self.project.layout.root
+            ):
+                raise ContractError("warning baseline plan has an invalid source path")
+            try:
+                if _is_link_like(baseline.log_path) or not baseline.log_path.is_file():
+                    raise SourceChangedError("warning baseline log is no longer a regular file")
+                baseline_bytes = _read_bounded(baseline.log_path, _legacy.MAX_LOG_BYTES)
+                baseline_text = _legacy.decode_log_bytes(baseline_bytes, str(baseline.log_path))
+            except (OSError, _legacy.ModToolError) as exc:
+                raise SourceChangedError(f"cannot re-read warning baseline log: {exc}") from exc
+            if (
+                len(baseline_bytes) != baseline.log_size
+                or hashlib.sha256(baseline_bytes).hexdigest() != baseline.log_sha256
+            ):
+                raise SourceChangedError(
+                    "baseline Log.txt changed after the runtime record was planned"
+                )
+            baseline_summary, baseline_target_enabled, baseline_game_version_observed = (
+                _analyse_runtime_log(
+                    baseline_text,
+                    project_name=self.project.config.name,
+                    game_semver=self.project.config.compatibility.game_semver,
+                )
+            )
+            if baseline_summary != dict(baseline.log_summary):
+                raise ContractError("warning baseline summary does not match the recorded log")
+            if baseline_target_enabled:
+                raise ContractError("warning baseline unexpectedly enables the tested mod")
+            if not baseline_game_version_observed:
+                raise ContractError("warning baseline does not identify the recorded game version")
+            ignored_warnings, unmatched_warnings = _warning_differential(log_text, baseline_text)
+            if (
+                ignored_warnings != baseline.ignored_warnings
+                or unmatched_warnings != baseline.unmatched_warnings
+            ):
+                raise ContractError("warning baseline differential changed after planning")
         expected_tested_mod = self.project.config.name if target_enabled else ""
         expected_semver = (
             self.project.config.compatibility.game_semver if game_version_observed else ""
@@ -811,6 +1128,7 @@ class RuntimeTestPlan:
                 clean_launch=self.clean_launch,
                 project_name=self.project.config.name,
                 game_semver=self.project.config.compatibility.game_semver,
+                unmatched_warnings=unmatched_warnings,
             )
             impact_problem = _save_impact_evidence_problem(
                 self.updated_config.save_impact, self.save_type
@@ -834,8 +1152,12 @@ class RuntimeTestPlan:
             raise ContractError("runtime-test recorded_at is invalid") from exc
         if recorded_time.tzinfo is None or recorded_time.utcoffset() is None:
             raise ContractError("runtime-test recorded_at must include a timezone")
-        return {
-            "schema_version": RUNTIME_TEST_SCHEMA_VERSION,
+        record = {
+            "schema_version": (
+                RUNTIME_TEST_SCHEMA_VERSION
+                if self.warning_baseline is not None
+                else _LEGACY_RUNTIME_TEST_SCHEMA_VERSION
+            ),
             "recorded_at": self.recorded_at,
             "runtime_status": self.updated_config.runtime_status.value,
             "compatibility": {
@@ -856,6 +1178,9 @@ class RuntimeTestPlan:
                 "observed_game_semver": self.observed_game_semver,
             },
         }
+        if self.warning_baseline is not None:
+            record["warning_baseline"] = self.warning_baseline.to_dict()
+        return record
 
 
 @dataclass(frozen=True, slots=True)
@@ -1088,12 +1413,14 @@ class SDKProject:
         achievement_impact: AchievementImpact,
         clean_launch: bool,
         save_type: RuntimeSaveType,
+        baseline_log_path: str | os.PathLike[str] | None = None,
     ) -> RuntimeTestPlan:
         """Record a user-performed test without launching the game.
 
         A passing record requires the current compatibility fingerprint and a
-        log without lines classified as errors or failures. The raw log and its
-        absolute path are never copied into the project.
+        log without lines classified as errors or failures. An optional clean
+        pre-candidate baseline may suppress only exact recurring warning lines.
+        Raw logs and their absolute paths are never copied into the project.
         """
 
         self._assert_config_unchanged()
@@ -1129,6 +1456,62 @@ class SDKProject:
             )
         except (_legacy.ModToolError, OSError) as exc:
             raise ProjectError(str(exc), code="LOG_INVALID", path=source) from exc
+        warning_baseline: _WarningBaseline | None = None
+        unmatched_warnings: int | None = None
+        if baseline_log_path is not None:
+            baseline_source = _lexical_absolute(Path(baseline_log_path))
+            if baseline_source == source:
+                raise ProjectError(
+                    "warning baseline must be a distinct pre-candidate log",
+                    code="BASELINE_LOG_SAME_AS_RUNTIME",
+                    path=baseline_source,
+                )
+            if _is_within(baseline_source, self.layout.root):
+                raise ProjectError(
+                    "warning baseline Log.txt must remain outside the ACMK project tree",
+                    code="BASELINE_LOG_INSIDE_PROJECT",
+                    path=baseline_source,
+                )
+            try:
+                if _is_link_like(baseline_source) or not baseline_source.is_file():
+                    raise ProjectError(
+                        "warning baseline must be a regular, non-symlink file",
+                        path=baseline_source,
+                    )
+                baseline_bytes = _read_bounded(baseline_source, _legacy.MAX_LOG_BYTES)
+                baseline_text = _legacy.decode_log_bytes(baseline_bytes, str(baseline_source))
+                (
+                    baseline_summary,
+                    baseline_target_enabled,
+                    baseline_game_version_observed,
+                ) = _analyse_runtime_log(
+                    baseline_text,
+                    project_name=self.config.name,
+                    game_semver=self.config.compatibility.game_semver,
+                )
+            except (_legacy.ModToolError, OSError) as exc:
+                raise ProjectError(
+                    str(exc), code="BASELINE_LOG_INVALID", path=baseline_source
+                ) from exc
+            if baseline_target_enabled:
+                raise ValidationFailedError(
+                    "warning baseline enables the tested mod; use a pre-candidate log",
+                    path=baseline_source,
+                )
+            if not baseline_game_version_observed:
+                raise ValidationFailedError(
+                    "warning baseline does not contain the exact game-version marker",
+                    path=baseline_source,
+                )
+            ignored_warnings, unmatched_warnings = _warning_differential(log_text, baseline_text)
+            warning_baseline = _WarningBaseline(
+                log_path=baseline_source,
+                log_size=len(baseline_bytes),
+                log_sha256=hashlib.sha256(baseline_bytes).hexdigest(),
+                log_summary=baseline_summary,
+                ignored_warnings=ignored_warnings,
+                unmatched_warnings=unmatched_warnings,
+            )
         if passed:
             blockers = _runtime_blockers(
                 summary,
@@ -1137,6 +1520,7 @@ class SDKProject:
                 clean_launch=clean_launch,
                 project_name=self.config.name,
                 game_semver=self.config.compatibility.game_semver,
+                unmatched_warnings=unmatched_warnings,
             )
             impact_problem = _save_impact_evidence_problem(save_impact, save_type)
             if impact_problem:
@@ -1175,6 +1559,7 @@ class SDKProject:
             log_size=len(log_bytes),
             log_sha256=hashlib.sha256(log_bytes).hexdigest(),
             log_summary=summary,
+            warning_baseline=warning_baseline,
             source_fingerprint=source_fingerprint,
             operating_system=(f"{platform.system()} {platform.release()}".strip()),
             toolkit_version=__version__,
@@ -1225,6 +1610,74 @@ class SDKProject:
             self._opened_config_sha256,
         )
 
+    def plan_observed_consensus(self) -> ObservedConsensusPlan:
+        """Reconcile or refresh a Generic project for its audited exact-build profile.
+
+        This is deliberately distinct from importing a game-generated skeleton. The
+        operation normalizes only the root manifest, writes sanitized origin evidence,
+        and invalidates any previous runtime pass because the release source may change.
+        An already reconciled project may repeat the operation after an intentional,
+        structurally valid manifest metadata update to refresh its bound evidence.
+        """
+
+        self._assert_config_unchanged()
+        if self.config.skeleton not in {
+            SkeletonSource.COMMUNITY_DRAFT,
+            SkeletonSource.OBSERVED_CONSENSUS,
+        }:
+            raise ProjectError(
+                "only a community-draft or observed-consensus project can be reconciled",
+                code="CONSENSUS_SOURCE_INVALID",
+                path=self.layout.config_path,
+            )
+        live_context = self._refresh_context()
+        _assert_context_matches(live_context, self.config.compatibility)
+        for path in (self.layout.config_path, self.layout.manifest, self.layout.state_root):
+            _legacy.assert_writable_project_path(path, live_context)
+        profile = _observed_consensus_profile(self.config.compatibility)
+        if profile is None:
+            raise ProjectError(
+                "no audited observed-consensus profile supports this exact game build",
+                code="CONSENSUS_PROFILE_UNSUPPORTED",
+                path=self.layout.config_path,
+            )
+        original_manifest = _read_bounded(self.layout.manifest, _legacy.MAX_TEXT_ASSET_BYTES)
+        manifest_bytes = _reconciled_observed_consensus_manifest(
+            ManifestDocument.from_bytes(original_manifest),
+            profile,
+            preserve_canonical=(self.config.skeleton is SkeletonSource.OBSERVED_CONSENSUS),
+        )
+        updated_config = replace(
+            self.config,
+            skeleton=SkeletonSource.OBSERVED_CONSENSUS,
+            runtime_status=RuntimeStatus.UNTESTED,
+        )
+        manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+        evidence_bytes = _observed_consensus_evidence_bytes(
+            updated_config, profile, manifest_sha256
+        )
+        evidence_path = self.layout.state_root / "import.json"
+        original_evidence = (
+            _read_bounded(evidence_path, _legacy.MAX_TEXT_ASSET_BYTES)
+            if evidence_path.exists()
+            else None
+        )
+        self._assert_config_unchanged()
+        return ObservedConsensusPlan(
+            project=self,
+            updated_config=updated_config,
+            manifest_bytes=manifest_bytes,
+            evidence_bytes=evidence_bytes,
+            profile=profile,
+            original_config_sha256=self._opened_config_sha256,
+            original_manifest_sha256=hashlib.sha256(original_manifest).hexdigest(),
+            original_evidence_sha256=(
+                hashlib.sha256(original_evidence).hexdigest()
+                if original_evidence is not None
+                else None
+            ),
+        )
+
     def update_metadata(
         self,
         updates: Mapping[str, str],
@@ -1233,7 +1686,10 @@ class SDKProject:
         backup: bool = True,
     ) -> Mapping[str, Any]:
         self._assert_config_unchanged()
-        duplicated = {key.casefold().replace("-", "").replace("_", "") for key in updates} & {
+        normalized_updates = {
+            key.strip().casefold().replace("-", "").replace("_", "") for key in updates
+        }
+        duplicated = normalized_updates & {
             "title",
             "type",
             "gameversion",
@@ -1243,6 +1699,14 @@ class SDKProject:
                 "project metadata updates cannot change Title, Type, or GameVersion; "
                 "re-import or use a coordinated project migration"
             )
+        if self.config.skeleton is SkeletonSource.OBSERVED_CONSENSUS:
+            permitted = {"changelog", "content", "description", "steammodid"}
+            unsupported = normalized_updates - permitted
+            if unsupported:
+                raise ContractError(
+                    "observed-consensus metadata updates are limited to Changelog, Content, "
+                    "Description, and SteamModId; refresh consensus evidence after applying"
+                )
         try:
             return dict(
                 _legacy.apply_metadata(
@@ -1415,8 +1879,9 @@ class SDKProject:
                 ),
                 (
                     "RELEASE_NONCANONICAL_SKELETON",
-                    "release projects must originate from a current game-generated skeleton",
-                    config.skeleton is not SkeletonSource.GAME_GENERATED,
+                    "release projects must originate from a current game-generated skeleton "
+                    "or an audited observed-consensus reconciliation",
+                    config.skeleton is SkeletonSource.COMMUNITY_DRAFT,
                 ),
                 (
                     "RELEASE_PROVENANCE_UNREVIEWED",
@@ -1442,6 +1907,8 @@ class SDKProject:
             ):
                 if condition:
                     yield Issue(Severity.ERROR, code, message, self.layout.config_path)
+            if config.skeleton is SkeletonSource.OBSERVED_CONSENSUS:
+                yield from self._observed_consensus_issues(manifest)
             if config.runtime_status is RuntimeStatus.PASSED:
                 yield from self._runtime_evidence_issues()
             source_entries: list[Path] = []
@@ -1477,6 +1944,66 @@ class SDKProject:
                         path,
                     )
 
+    def _observed_consensus_issues(self, manifest: ManifestDocument | None) -> Iterable[Issue]:
+        profile = _observed_consensus_profile(self.config.compatibility)
+        if profile is None:
+            yield Issue(
+                Severity.ERROR,
+                "RELEASE_CONSENSUS_PROFILE_UNSUPPORTED",
+                "the observed-consensus profile does not support this exact game build",
+                self.layout.config_path,
+            )
+            return
+        evidence_path = self.layout.state_root / "import.json"
+        try:
+            if _is_link_like(evidence_path) or not evidence_path.is_file():
+                raise ValueError("a regular .acmk/import.json record is required")
+            payload = json.loads(
+                _read_bounded(evidence_path, _legacy.MAX_TEXT_ASSET_BYTES).decode("utf-8")
+            )
+            if not isinstance(payload, dict):
+                raise ValueError("evidence root must be an object")
+            expected_keys = {
+                "schema_version",
+                "source",
+                "consensus_profile",
+                "manifest_sha256",
+                "compatibility",
+            }
+            if set(payload) != expected_keys:
+                raise ValueError("evidence fields do not match schema 2")
+            if payload.get("schema_version") != _OBSERVED_CONSENSUS_IMPORT_SCHEMA_VERSION:
+                raise ValueError("unsupported evidence schema")
+            if payload.get("source") != SkeletonSource.OBSERVED_CONSENSUS.value:
+                raise ValueError("evidence source does not match acmk.toml")
+            if payload.get("consensus_profile") != profile:
+                raise ValueError("evidence profile does not match this game build")
+            manifest_sha256 = payload.get("manifest_sha256")
+            if not _valid_sha256(manifest_sha256):
+                raise ValueError("manifest_sha256 must be a lowercase SHA-256 digest")
+            current_manifest_sha256 = _hash_file(
+                self.layout.manifest,
+                limit=_legacy.MAX_TEXT_ASSET_BYTES,
+            )
+            if manifest_sha256 != current_manifest_sha256:
+                raise ValueError("manifest_sha256 does not match src/Index.art")
+            if payload.get("compatibility") != _compatibility_dict(self.config.compatibility):
+                raise ValueError("evidence compatibility does not match acmk.toml")
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError, ProjectError) as exc:
+            yield Issue(
+                Severity.ERROR,
+                "RELEASE_CONSENSUS_EVIDENCE_INVALID",
+                f"observed-consensus evidence is invalid: {exc}",
+                evidence_path,
+            )
+        if manifest is None or not _matches_observed_consensus_manifest(manifest, profile):
+            yield Issue(
+                Severity.ERROR,
+                "RELEASE_CONSENSUS_MANIFEST_MISMATCH",
+                "root Index.art no longer matches the audited Generic manifest structure",
+                self.layout.manifest,
+            )
+
     def _runtime_evidence_issues(self) -> Iterable[Issue]:
         path = self.layout.state_root / "runtime-test.json"
         try:
@@ -1491,6 +2018,12 @@ class SDKProject:
             payload = json.loads(_read_bounded(path, _legacy.MAX_TEXT_ASSET_BYTES).decode("utf-8"))
             if not isinstance(payload, dict):
                 raise ValueError("record root must be an object")
+            schema_version = payload.get("schema_version")
+            if schema_version not in {
+                _LEGACY_RUNTIME_TEST_SCHEMA_VERSION,
+                RUNTIME_TEST_SCHEMA_VERSION,
+            }:
+                raise ValueError("unsupported runtime-test schema")
             expected_root_keys = {
                 "schema_version",
                 "recorded_at",
@@ -1501,10 +2034,10 @@ class SDKProject:
                 "source_fingerprint",
                 "environment",
             }
+            if schema_version == RUNTIME_TEST_SCHEMA_VERSION:
+                expected_root_keys.add("warning_baseline")
             if set(payload) != expected_root_keys:
                 raise ValueError("record fields do not match the runtime-test schema")
-            if payload.get("schema_version") != RUNTIME_TEST_SCHEMA_VERSION:
-                raise ValueError("unsupported runtime-test schema")
             if payload.get("runtime_status") != RuntimeStatus.PASSED.value:
                 raise ValueError("record does not describe a passing test")
             recorded_at = payload.get("recorded_at")
@@ -1526,11 +2059,47 @@ class SDKProject:
                 raise ValueError("log_summary does not match the runtime-test schema")
             if (
                 log_summary["lines"] == 0
-                or log_summary["warnings"] != 0
                 or log_summary["errors_or_failures"] != 0
                 or log_summary["mods_enabled"] == 0
             ):
                 raise ValueError("passing runtime evidence must contain a clean enabled-mod log")
+            if schema_version == _LEGACY_RUNTIME_TEST_SCHEMA_VERSION:
+                if log_summary["warnings"] != 0:
+                    raise ValueError("passing v1 runtime evidence must contain a warning-free log")
+            else:
+                warning_baseline = payload.get("warning_baseline")
+                baseline_keys = {
+                    "algorithm",
+                    "log_sha256",
+                    "log_summary",
+                    "ignored_warnings",
+                    "unmatched_warnings",
+                }
+                if not isinstance(warning_baseline, dict) or set(warning_baseline) != baseline_keys:
+                    raise ValueError("warning_baseline does not match the runtime-test schema")
+                if warning_baseline.get("algorithm") != _WARNING_BASELINE_ALGORITHM:
+                    raise ValueError("unsupported warning baseline algorithm")
+                if not _valid_sha256(warning_baseline.get("log_sha256")):
+                    raise ValueError("warning baseline must contain a SHA-256 digest")
+                baseline_summary = warning_baseline.get("log_summary")
+                if not isinstance(baseline_summary, dict) or set(baseline_summary) != summary_keys:
+                    raise ValueError("warning baseline summary does not match the schema")
+                if any(not _nonnegative_int(baseline_summary.get(key)) for key in summary_keys):
+                    raise ValueError("warning baseline summary counts must be non-negative")
+                ignored_warnings = warning_baseline.get("ignored_warnings")
+                unmatched_warnings = warning_baseline.get("unmatched_warnings")
+                if not _nonnegative_int(ignored_warnings) or not _nonnegative_int(
+                    unmatched_warnings
+                ):
+                    raise ValueError("warning baseline differential counts must be non-negative")
+                if (
+                    unmatched_warnings != 0
+                    or ignored_warnings != log_summary["warnings"]
+                    or ignored_warnings > baseline_summary["warnings"]
+                ):
+                    raise ValueError(
+                        "passing runtime evidence contains warnings outside the baseline"
+                    )
             expected_compatibility = {
                 "game_version": self.config.compatibility.game_version,
                 "game_semver": self.config.compatibility.game_semver,
@@ -1741,16 +2310,18 @@ def _runtime_blockers(
     clean_launch: bool,
     project_name: str,
     game_semver: str,
+    unmatched_warnings: int | None = None,
 ) -> list[str]:
     failures = int(summary.get("errors_or_failures", 0))
-    warnings = int(summary.get("warnings", 0))
+    warnings = int(summary.get("warnings", 0)) if unmatched_warnings is None else unmatched_warnings
     lines = int(summary.get("lines", 0))
     mods_enabled = int(summary.get("mods_enabled", 0))
     blockers: list[str] = []
     if failures:
         blockers.append(f"{failures} errors or failures")
     if warnings:
-        blockers.append(f"{warnings} warnings")
+        suffix = " not present in the warning baseline" if unmatched_warnings is not None else ""
+        blockers.append(f"{warnings} warnings{suffix}")
     if lines == 0:
         blockers.append("no log lines")
     if mods_enabled == 0:
@@ -1764,6 +2335,28 @@ def _runtime_blockers(
     return blockers
 
 
+def _warning_differential(runtime_text: str, baseline_text: str) -> tuple[int, int]:
+    """Return exact baseline-matched and remaining runtime warning occurrences."""
+
+    runtime_warnings = Counter(_normalised_warning_lines(runtime_text))
+    baseline_warnings = Counter(_normalised_warning_lines(baseline_text))
+    ignored = sum((runtime_warnings & baseline_warnings).values())
+    return ignored, sum(runtime_warnings.values()) - ignored
+
+
+def _normalised_warning_lines(text: str) -> Iterable[str]:
+    for line in text.splitlines():
+        if re.search(r"\bwarning\b", line, re.IGNORECASE) is None:
+            continue
+        without_timestamp = re.sub(
+            r"^\s*\[\d{1,2}:\d{2}:\d{2}(?:[.,]\d+)?\]\s*",
+            "",
+            line,
+            count=1,
+        )
+        yield without_timestamp.strip()
+
+
 def _save_impact_evidence_problem(
     save_impact: SaveImpact, save_type: RuntimeSaveType
 ) -> str | None:
@@ -1773,6 +2366,155 @@ def _save_impact_evidence_problem(
     ):
         return "save impact 'none-observed' requires an existing-disposable save test"
     return None
+
+
+def _observed_consensus_profile(compatibility: Compatibility) -> str | None:
+    key = (
+        compatibility.game_version,
+        compatibility.game_semver,
+        compatibility.steam_build_id,
+        compatibility.content_hash.upper(),
+    )
+    return _OBSERVED_CONSENSUS_PROFILES.get(key)
+
+
+def _compatibility_dict(compatibility: Compatibility) -> dict[str, str]:
+    return {
+        "game_version": compatibility.game_version,
+        "game_semver": compatibility.game_semver,
+        "steam_build_id": compatibility.steam_build_id,
+        "content_hash": compatibility.content_hash,
+    }
+
+
+def _observed_manifest_fields(manifest: ManifestDocument, profile: str) -> Mapping[str, str]:
+    if profile not in _OBSERVED_CONSENSUS_PROFILES.values():
+        raise ProjectError(
+            "unsupported observed-consensus profile", code="CONSENSUS_PROFILE_UNSUPPORTED"
+        )
+    expected_kinds = {
+        "Changelog": "String",
+        "Content": "String",
+        "Description": "String",
+        "GameVersion": "String",
+        "SteamModId": "U32x2",
+        "Title": "String",
+        "Type": "String",
+    }
+    if manifest.duplicates or set(manifest.fields) != set(expected_kinds):
+        raise ProjectError(
+            "root manifest must contain exactly the seven audited Generic fields",
+            code="CONSENSUS_MANIFEST_MISMATCH",
+        )
+    if dict(manifest.kinds) != expected_kinds:
+        raise ProjectError(
+            "root manifest field types differ from the audited Generic profile",
+            code="CONSENSUS_MANIFEST_MISMATCH",
+        )
+    fields = manifest.fields
+    for name in ("Changelog", "Description", "Title"):
+        if not fields[name].strip():
+            raise ProjectError(
+                f"root manifest {name} cannot be empty",
+                code="CONSENSUS_MANIFEST_MISMATCH",
+            )
+    if fields["GameVersion"] != "22" or fields["Type"] != "Generic":
+        raise ProjectError(
+            "root manifest must target Generic GameVersion 22",
+            code="CONSENSUS_MANIFEST_MISMATCH",
+        )
+    try:
+        steam_mod_id = _legacy.normalise_steam_mod_id(fields["SteamModId"], allow_single=False)
+    except _legacy.ModToolError as exc:
+        raise ProjectError(
+            f"invalid root manifest SteamModId: {exc}",
+            code="CONSENSUS_MANIFEST_MISMATCH",
+        ) from exc
+    if steam_mod_id != fields["SteamModId"]:
+        raise ProjectError(
+            "root manifest SteamModId must use canonical U32x2 formatting",
+            code="CONSENSUS_MANIFEST_MISMATCH",
+        )
+    return fields
+
+
+def _render_observed_consensus_manifest(manifest: ManifestDocument, profile: str) -> bytes:
+    fields = _observed_manifest_fields(manifest, profile)
+    try:
+        text = _legacy.canonical_manifest(
+            title=fields["Title"],
+            description=fields["Description"],
+            changelog=fields["Changelog"],
+            game_version=fields["GameVersion"],
+            mod_type=fields["Type"],
+            steam_mod_id=fields["SteamModId"],
+            content=None,
+        )
+        data = _legacy.encode_utf16le_art(text)
+    except _legacy.ModToolError as exc:
+        raise ProjectError(str(exc), code="CONSENSUS_MANIFEST_MISMATCH") from exc
+    rendered = ManifestDocument.from_bytes(data)
+    if not _matches_observed_consensus_manifest(rendered, profile, allow_content_value=False):
+        raise ContractError("internal observed-consensus renderer violated its profile")
+    return data
+
+
+def _reconciled_observed_consensus_manifest(
+    manifest: ManifestDocument,
+    profile: str,
+    *,
+    preserve_canonical: bool,
+) -> bytes:
+    if preserve_canonical and _matches_observed_consensus_manifest(manifest, profile):
+        return manifest.to_bytes()
+    return _render_observed_consensus_manifest(manifest, profile)
+
+
+def _matches_observed_consensus_manifest(
+    manifest: ManifestDocument,
+    profile: str,
+    *,
+    allow_content_value: bool = True,
+) -> bool:
+    try:
+        fields = _observed_manifest_fields(manifest, profile)
+        content_variants: tuple[str | None, ...] = (
+            (None, fields["Content"]) if allow_content_value else (None,)
+        )
+        for content in content_variants:
+            text = _legacy.canonical_manifest(
+                title=fields["Title"],
+                description=fields["Description"],
+                changelog=fields["Changelog"],
+                game_version=fields["GameVersion"],
+                mod_type=fields["Type"],
+                steam_mod_id=fields["SteamModId"],
+                content=content,
+            )
+            if manifest.to_bytes() == _legacy.encode_utf16le_art(text):
+                return True
+    except (ContractError, ProjectError, _legacy.ModToolError):
+        return False
+    return False
+
+
+def _observed_consensus_evidence_bytes(
+    config: ProjectConfig, profile: str, manifest_sha256: str
+) -> bytes:
+    if config.skeleton is not SkeletonSource.OBSERVED_CONSENSUS:
+        raise ContractError("observed-consensus evidence requires the matching source label")
+    if _observed_consensus_profile(config.compatibility) != profile:
+        raise ContractError("observed-consensus evidence uses an unsupported profile")
+    if not _valid_sha256(manifest_sha256):
+        raise ContractError("observed-consensus manifest hash is invalid")
+    record = {
+        "schema_version": _OBSERVED_CONSENSUS_IMPORT_SCHEMA_VERSION,
+        "source": SkeletonSource.OBSERVED_CONSENSUS.value,
+        "consensus_profile": profile,
+        "manifest_sha256": manifest_sha256,
+        "compatibility": _compatibility_dict(config.compatibility),
+    }
+    return (json.dumps(record, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
 def _hash_file(path: Path, *, limit: int | None = None) -> str:
@@ -1869,6 +2611,20 @@ def _assert_no_link_components(path: Path, boundary: Path) -> None:
             code="PROJECT_PATH_LINK",
             path=linked,
         )
+    try:
+        resolved_path = lexical_path.resolve(strict=False)
+        resolved_boundary = lexical_boundary.resolve(strict=False)
+        resolved_path.relative_to(resolved_boundary)
+    except OSError as exc:
+        raise ProjectError(
+            f"cannot resolve project path components: {exc}", path=lexical_path
+        ) from exc
+    except ValueError as exc:
+        raise ProjectError(
+            "project path resolves outside its permitted root",
+            code="UNSAFE_PATH",
+            path=lexical_path,
+        ) from exc
 
 
 def _unlink_quietly(path: Path) -> None:
@@ -1887,11 +2643,17 @@ def _rollback_runtime_record(
     original_record: bytes | None,
     written_record: bytes,
 ) -> list[str]:
+    return _rollback_files(
+        (
+            ("acmk.toml", config_path, original_config, written_config),
+            ("runtime-test.json", record_path, original_record, written_record),
+        )
+    )
+
+
+def _rollback_files(files: Iterable[tuple[str, Path, bytes | None, bytes]]) -> list[str]:
     errors: list[str] = []
-    for label, path, original, written in (
-        ("acmk.toml", config_path, original_config, written_config),
-        ("runtime-test.json", record_path, original_record, written_record),
-    ):
+    for label, path, original, written in files:
         try:
             if not path.exists():
                 if original is not None:
@@ -1920,6 +2682,22 @@ def _write_new(path: Path, data: bytes) -> None:
             os.fsync(handle.fileno())
     except OSError as exc:
         raise ProjectError(f"cannot create {path}: {exc}", path=path) from exc
+
+
+def _create_state_backup(
+    source: Path,
+    data: bytes,
+    backup_root: Path,
+    *,
+    boundary: Path,
+) -> Path:
+    _assert_no_link_components(backup_root, boundary)
+    backup_root.mkdir(parents=True, exist_ok=True)
+    _assert_no_link_components(backup_root, boundary)
+    destination = _next_backup(backup_root / source.name)
+    _assert_no_link_components(destination, boundary)
+    _write_new(destination, data)
+    return destination
 
 
 def _safe_destination(root: Path, relative: str) -> Path:

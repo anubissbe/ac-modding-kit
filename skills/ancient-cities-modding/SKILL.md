@@ -12,7 +12,7 @@ Create mods against the user's installed build and the game's own data-driven ov
 1. Run `python scripts/ancient_cities_mod.py --json discover` before planning or editing. Never assume the Steam library, Documents folder, game build, or internal `GameVersion`.
 2. Read the installed `Modding Agreement.txt` completely before the first creation, packaging, or publishing action in a task. Re-read it when its hash changes. Do not decompile or disassemble binaries, bypass DRM, or infer a DLL/plugin API.
 3. Work in a dedicated project under the current Codex workspace. Never edit `Program Files`, Steam Workshop cache, or a numeric game-extracted mod folder. Treat those locations as read-only evidence.
-4. Use the game's **Mods > Create > New generic/New language** output as the canonical skeleton for the installed build. Use `init-project` only for an isolated draft when a game-generated skeleton is unavailable, and validate it before use.
+4. Use the game's **Mods > Create > New generic/New language** output as the preferred canonical skeleton for the installed build. Use `init-project` only for an isolated draft when a game-generated skeleton is unavailable. A Generic draft may use `acmk project reconcile-consensus` only when the installed SDK supports the exact discovered build; retain its honest `observed-consensus` label and fresh evidence/runtime requirements.
 5. Preserve UTF-16LE with BOM for every textual `.art` and `.loc` file. Do not use `apply_patch`, ordinary UTF-8 writers, or formatters on them. Use the bundled metadata editor or a byte-preserving script. Refuse files that do not round-trip exactly.
 6. Do not redistribute unmodified game or Workshop assets/code. Create original assets, retain provenance, and keep overrides minimal. If the loader appears to require a full proprietary base file, flag the licensing uncertainty before distribution.
 7. Never deploy, launch the game, delete/replace a local mod, or publish/update a Workshop item without explicit user confirmation. Publishing also requires current author/contact details and a rights/provenance check.
@@ -26,7 +26,7 @@ Create mods against the user's installed build and the game's own data-driven ov
    `base_data_root` read-only (prefer `rg --files <base_data_root> | rg <term>`) for the
    exact current base definition. Mod examples provide concepts; the current base file
    provides the schema. Never copy third-party assets or trust stale values blindly.
-4. **Create/import a skeleton.** Prefer the in-game creator. Copy the resulting non-numeric local skeleton into the workspace. Keep `SteamModId` as `0,0` until the game publishes it.
+4. **Create/import a skeleton.** Prefer the in-game creator. Copy the resulting non-numeric local skeleton into the workspace. If the Generic creator demonstrably fails, use only an SDK-supported exact-build `reconcile-consensus` fallback; never relabel that output as game-generated and never copy Workshop content. Keep `SteamModId` as `0,0` until the game publishes it.
 5. **Implement minimally.** Mirror payload paths under `Ancient/...`. Add only intentional files. Use original visuals/audio and exact-case references. For format and layout rules, read [format-and-layout.md](references/format-and-layout.md).
 6. **Validate before deployment.** Run `validate <project> --strict`. Run `conflicts`
    for the discovered enabled set and verify its scanned count against the resolved
@@ -73,6 +73,11 @@ prefer its typed project workflow for new work while retaining the safety rules 
 - `acmk knowledge list|read|search` exposes the audited reference set offline.
 - `acmk project import` copies a current non-numeric in-game skeleton into a structured
   authoring project; it is dry-run unless `--apply` is explicitly supplied.
+- `acmk project reconcile-consensus` is the narrower Generic fallback for a supported exact
+  build. It records sanitized origin evidence, uses the separate `observed-consensus` label,
+  resets runtime status, and is also dry-run unless `--apply` is supplied. Repeat its
+  preview/apply sequence after an intentional canonical root-manifest metadata change; this
+  refreshes the bound evidence and requires a fresh runtime test.
 - Keep runtime files in `src/`, authoring sources in `assets-src/`, local reports in
   `.acmk/`, and isolated upload candidates in `dist/workshop/`.
 - Use `project check --profile authoring` while editing and `--profile release` only after

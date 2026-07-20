@@ -1,7 +1,8 @@
 # Python community SDK
 
-Status: **alpha**. SDK API, report-envelope, project, and runtime-test schema versions
-are all `1`.
+Status: **alpha**. SDK API, report-envelope, and project schema versions are `1`.
+The latest runtime-test evidence schema is `2`; release validation continues to accept
+existing version `1` records.
 
 ACMK is an unofficial, standard-library-only Python SDK around Ancient Cities' publicly
 observable data and asset mod interface. It is not an engine SDK and does not invent a
@@ -64,6 +65,22 @@ The SDK owns this file: unknown keys are rejected so they cannot disappear durin
 rewrite. Write operations serialize the canonical layout and may remove comments; their
 results expose the backup path so the exact previous file remains recoverable.
 
+## Standalone building authoring
+
+`BuildingSpec`, typed model/stage bindings, and `standalone_building_builder` provide a
+dry-run-first scaffold for a new building directory. The preflight covers the root manifest,
+UTF-16LE ART/LOC output, the distinct ART and runtime-proven building-LOC newline layouts,
+exact local file references, current base-reference anchors, FBX headers, localization
+markers, the 128x128 RGBA icon, the grayscale location mask, and mod relations. Read the
+[standalone building guide](standalone-buildings.md) for the complete contract and example.
+
+The typed result reports `engine_references`, `mod_dependencies`, and `mod_conflicts`
+separately; `BuildingSpec.index_path` is the exact generated ART definition path.
+
+This workflow is an experimental `community-draft`, not a complete engine SDK. It never
+deploys or launches the game, and it cannot replace Blender validation or a disposable-save
+runtime test.
+
 ## Import the canonical skeleton
 
 Create an empty generic or language mod in the current game's Mods menu. Import that
@@ -78,12 +95,37 @@ This only previews. Add `--apply` after reviewing the paths. The importer valida
 skeleton, records hashes without storing its private absolute source path, and copies it
 atomically into a new authoring project.
 
+If the current Generic creator does not produce a usable folder, ACMK has a narrower,
+honestly labelled fallback for exact builds whose Generic root layout has been independently
+audited:
+
+```powershell
+acmk project reconcile-consensus C:\mods\my-project
+acmk project reconcile-consensus C:\mods\my-project --apply
+```
+
+The first command is a write-free preview. The applied operation changes
+`community-draft` to `observed-consensus`, normalizes only `src/Index.art`, stores a
+sanitized profile record in `.acmk/import.json`, and resets runtime status to `untested`.
+It never copies Workshop content and never claims that the game generated the skeleton.
+Release validation requires the exact supported compatibility fingerprint, profile record,
+Generic manifest structure, and a fresh passing runtime test. A game update makes the
+profile unsupported until a new audit is added.
+
+The evidence record binds the complete current root manifest. If a reconciled project later
+changes canonical Description, Changelog, Content, or Steam ID metadata, release validation
+will stop until `reconcile-consensus` is previewed and applied again. That refresh preserves
+the canonical metadata, backs up the configuration and manifest under `.acmk/backups`,
+updates the evidence hash, resets runtime status, and therefore requires a new runtime test.
+Legacy Date and Version nodes are outside the audited seven-field profile and are rejected
+before an observed-consensus manifest is changed.
+
 ## Draft builder
 
 The typed `DraftProjectBuilder` can create synthetic or experimental projects while a
-game-generated skeleton is unavailable. Such projects are permanently labelled
-`community-draft`; release validation refuses them until they are rebased onto a current
-game-generated skeleton.
+game-generated skeleton is unavailable. Such projects begin as `community-draft`; release
+validation refuses them until they are either rebased onto a current game-generated
+skeleton or reconciled through one supported exact-build observed-consensus profile.
 
 `AncientPath`, `GameVersion`, `SteamModId`, `ManifestSpec`, `Utf16TextDocument`, and
 `ManifestDocument` provide validated value objects. ART/LOC generation always uses exactly
@@ -111,13 +153,21 @@ test to the operating system, toolkit and exact game build plus a deterministic 
 of every runtime source file, so later edits invalidate release readiness. Claiming
 `none-observed` save impact requires a test with an existing disposable save.
 
+If the unmodded game emits a reproducible warning, save a separate clean-launch log before
+enabling the candidate and pass it with `--baseline-log`. ACMK removes timestamps, compares
+warning lines as an exact occurrence-counted set, and records both hashes plus the sanitized
+differential. The baseline must identify the same game version and must not enable the tested
+mod. New warning text, excess duplicate warnings, and every runtime error or failure remain
+blocking. Raw logs and private absolute paths are still excluded from the project. Warning-free
+records keep the v1 evidence format; supplying a baseline selects v2.
+
 Staging creates an isolated Workshop directory; it never deploys to the game and never
 uploads to Steam. Release validation additionally requires resolved license/contact data in
 both `acmk.toml` and the manifest's distributed Description or Content, a game-generated
-skeleton, a current build fingerprint, no authoring files in `src/`, reviewed provenance
-notes, and a recorded successful runtime test. `--license` and `--provenance reviewed` are
-human attestations, not automated proof of rights. Repeat the contact and license in the
-manual Workshop listing before publication.
+skeleton or valid observed-consensus evidence, a current build fingerprint, no authoring
+files in `src/`, reviewed provenance notes, and a recorded successful runtime test.
+`--license` and `--provenance reviewed` are human attestations, not automated proof of
+rights. Repeat the contact and license in the manual Workshop listing before publication.
 
 ## Offline knowledge base
 

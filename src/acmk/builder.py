@@ -6,7 +6,7 @@ import hashlib
 import os
 import shutil
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -228,6 +228,8 @@ class DraftProjectBuilder:
         version: str = "0.1.0",
         license: str = "NOASSERTION",
         contact: str = "",
+        dependencies: Sequence[str] = (),
+        conflicts: Sequence[str] = (),
         context_refresher: Callable[[], _legacy.DiscoveryContext] | None = None,
     ) -> None:
         self._target = Path(target)
@@ -248,6 +250,8 @@ class DraftProjectBuilder:
                 steam_build_id=context.build_id or "",
                 content_hash=context.content_hash or "",
             ),
+            dependencies=tuple(dependencies),
+            conflicts=tuple(conflicts),
         )
         self._contents: dict[str, PlannedContent] = {}
         self._thumbnail: bytes | None = None

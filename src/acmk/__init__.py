@@ -10,6 +10,16 @@ from ._version import (
     __version__,
 )
 from .builder import DraftProjectBuilder, DraftProjectPlan, DraftProjectResult, PlannedContent
+from .building import (
+    BuildingAssetPath,
+    BuildingModel,
+    BuildingScaffoldBuilder,
+    BuildingScaffoldPlan,
+    BuildingScaffoldResult,
+    BuildingSpec,
+    ConstructionStage,
+    DecayStage,
+)
 from .config import (
     AchievementImpact,
     Compatibility,
@@ -58,6 +68,8 @@ from .manifest import (
 from .paths import AncientPath, EngineReference, ProjectRelativePath
 from .project import (
     FileSnapshot,
+    ObservedConsensusPlan,
+    ObservedConsensusResult,
     ProjectConfigPlan,
     ProjectConfigResult,
     ProjectImporter,
@@ -90,9 +102,17 @@ __all__ = [
     "AchievementImpact",
     "AncientCitiesSDK",
     "AncientPath",
+    "BuildingAssetPath",
+    "BuildingModel",
+    "BuildingScaffoldBuilder",
+    "BuildingScaffoldPlan",
+    "BuildingScaffoldResult",
+    "BuildingSpec",
     "CheckStatus",
     "Compatibility",
     "ContractError",
+    "ConstructionStage",
+    "DecayStage",
     "DiscoveryOptions",
     "DiscoverySnapshot",
     "DoctorCheck",
@@ -112,6 +132,8 @@ __all__ = [
     "ManifestDocument",
     "ManifestSpec",
     "NewlineStyle",
+    "ObservedConsensusPlan",
+    "ObservedConsensusResult",
     "PROJECT_SCHEMA_VERSION",
     "PlannedContent",
     "ProjectConfig",

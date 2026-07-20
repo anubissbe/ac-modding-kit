@@ -250,7 +250,7 @@ class ManifestSpec:
     game_version: GameVersion
     mod_type: str = "Generic"
     steam_mod_id: SteamModId = SteamModId()
-    content: str = ""
+    content: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.game_version, GameVersion):
@@ -259,14 +259,8 @@ class ManifestSpec:
             raise ContractError("manifest steam_mod_id must be SteamModId")
         if any(
             not isinstance(value, str)
-            for value in (
-                self.title,
-                self.description,
-                self.changelog,
-                self.mod_type,
-                self.content,
-            )
-        ):
+            for value in (self.title, self.description, self.changelog, self.mod_type)
+        ) or (self.content is not None and not isinstance(self.content, str)):
             raise ContractError("manifest text fields must be strings")
         for name, value in (
             ("title", self.title),
@@ -278,7 +272,7 @@ class ManifestSpec:
                 raise ContractError(f"manifest {name} cannot be empty")
             if "\x00" in value:
                 raise ContractError(f"manifest {name} cannot contain NUL")
-        if "\x00" in self.content:
+        if self.content is not None and "\x00" in self.content:
             raise ContractError("manifest content cannot contain NUL")
 
     def render(self) -> ManifestDocument:

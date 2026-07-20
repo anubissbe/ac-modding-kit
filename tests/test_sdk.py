@@ -14,6 +14,7 @@ import subprocess
 import tomllib
 import unittest
 import uuid
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 
@@ -298,6 +299,11 @@ class ConfigTests(SyntheticTempTestCase):
         Draft202012Validator(bundled_schema("acmk-project-v1.schema.json")).validate(
             config.to_dict()
         )
+        observed = replace(config, skeleton=acmk.SkeletonSource.OBSERVED_CONSENSUS)
+        self.assertEqual(ProjectConfig.from_bytes(observed.to_toml().encode("utf-8")), observed)
+        Draft202012Validator(bundled_schema("acmk-project-v1.schema.json")).validate(
+            observed.to_dict()
+        )
         Draft202012Validator(bundled_schema("acmk-report-envelope-v1.schema.json")).validate(
             acmk.envelope("test", {})
         )
@@ -431,6 +437,207 @@ class ImportAndProjectTests(SyntheticTempTestCase):
         with self.assertRaisesRegex(ACMKError, "executable"):
             acmk.PlannedContent.create(AncientPath("Ancient/payload.dll"), b"synthetic")
 
+    def test_observed_consensus_reconciliation_is_evidenced_and_resets_runtime(self) -> None:
+        target = self.root / "consensus-project"
+        builder = DraftProjectBuilder(
+            target,
+            identifier="consensus-project",
+            manifest=ManifestSpec(
+                title="Consensus project",
+                description=(
+                    "Only synthetic test data. License: MIT. Contact: https://github.com/example"
+                ),
+                changelog="Initial synthetic version",
+                game_version=GameVersion("22"),
+                content="Pre-reconciliation draft metadata",
+            ),
+            context=self.context,
+            license="MIT",
+            contact="https://github.com/example",
+        )
+        builder.set_thumbnail(synthetic_jpeg())
+        builder.plan().apply()
+        draft = SDKProject.open(target, context=self.context)
+        self.assertIn(
+            "RELEASE_NONCANONICAL_SKELETON",
+            {issue.code for issue in draft.validate(ValidationProfile.RELEASE).issues},
+        )
+
+        log = self.root / "consensus-log.txt"
+        log.write_bytes(
+            (
+                "[12:00:00] Ancient Cities.1.9.3\n"
+                "[12:00:01] Enabling Mod: C:/Synthetic/Consensus (Consensus project)\n"
+            ).encode("utf-16-le")
+        )
+        draft.plan_runtime_test(
+            log,
+            passed=True,
+            save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+            achievement_impact=acmk.AchievementImpact.DISABLED,
+            clean_launch=True,
+            save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+        ).apply()
+        tested = SDKProject.open(target, context=self.context)
+        self.assertEqual(tested.config.runtime_status, RuntimeStatus.PASSED)
+
+        plan = tested.plan_observed_consensus()
+        preview = plan.preview()
+        self.assertEqual(preview.mode, acmk.ExecutionMode.DRY_RUN)
+        self.assertTrue(preview.runtime_reset)
+        self.assertEqual(tested.config.skeleton, acmk.SkeletonSource.COMMUNITY_DRAFT)
+        forged = replace(plan, updated_config=replace(plan.updated_config, name="Forged"))
+        with self.assertRaisesRegex(ContractError, "unauthorized"):
+            forged.preview()
+
+        applied = plan.apply()
+        self.assertEqual(applied.mode, acmk.ExecutionMode.APPLY)
+        self.assertIsNotNone(applied.config_backup)
+        self.assertIsNotNone(applied.manifest_backup)
+        assert applied.config_backup is not None and applied.manifest_backup is not None
+        self.assertTrue(applied.config_backup.is_relative_to(target / ".acmk" / "backups"))
+        self.assertTrue(applied.manifest_backup.is_relative_to(target / ".acmk" / "backups"))
+        self.assertFalse((target / "src" / "Index.art.bak").exists())
+        reopened = SDKProject.open(target, context=self.context)
+        self.assertEqual(reopened.config.skeleton, acmk.SkeletonSource.OBSERVED_CONSENSUS)
+        self.assertEqual(reopened.config.runtime_status, RuntimeStatus.UNTESTED)
+        manifest = ManifestDocument.read(target / "src" / "Index.art")
+        content_block = manifest.document.text.split('Name:"Content"', 1)[1].split("}", 1)[0]
+        self.assertNotIn("Value:", content_block)
+        evidence = json.loads((target / ".acmk" / "import.json").read_text(encoding="utf-8"))
+        self.assertEqual(evidence["schema_version"], 2)
+        self.assertEqual(evidence["source"], "observed-consensus")
+        self.assertEqual(evidence["consensus_profile"], "generic-gv22-b23915225-v1")
+        release_codes = {
+            issue.code for issue in reopened.validate(ValidationProfile.RELEASE).issues
+        }
+        self.assertNotIn("RELEASE_NONCANONICAL_SKELETON", release_codes)
+        self.assertIn("RELEASE_RUNTIME_UNTESTED", release_codes)
+        self.assertNotIn("RELEASE_CONSENSUS_EVIDENCE_INVALID", release_codes)
+        self.assertNotIn("RELEASE_CONSENSUS_MANIFEST_MISMATCH", release_codes)
+
+        retest_log = self.root / "consensus-retest-log.txt"
+        retest_log.write_bytes(
+            (
+                "[13:00:00] Ancient Cities.1.9.3\n"
+                "[13:00:01] Enabling Mod: C:/Synthetic/Consensus (Consensus project)\n"
+            ).encode("utf-16-le")
+        )
+        reopened.plan_runtime_test(
+            retest_log,
+            passed=True,
+            save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+            achievement_impact=acmk.AchievementImpact.DISABLED,
+            clean_launch=True,
+            save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+        ).apply()
+        tested_again = SDKProject.open(target, context=self.context)
+        manifest_before_rejected_update = (target / "src" / "Index.art").read_bytes()
+        for field in ("Date", "Version"):
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(ContractError, "observed-consensus metadata updates"),
+            ):
+                tested_again.update_metadata({field: "synthetic"}, apply=True)
+        self.assertEqual(
+            (target / "src" / "Index.art").read_bytes(), manifest_before_rejected_update
+        )
+        metadata_result = tested_again.update_metadata(
+            {
+                "Changelog": "Metadata refreshed after reconciliation",
+                "Content": "License: MIT. Contact: https://github.com/example",
+            },
+            apply=True,
+            backup=False,
+        )
+        self.assertTrue(metadata_result["changed"])
+        metadata_edited = SDKProject.open(target, context=self.context)
+        stale_codes = {
+            issue.code for issue in metadata_edited.validate(ValidationProfile.RELEASE).issues
+        }
+        self.assertIn("RELEASE_CONSENSUS_EVIDENCE_INVALID", stale_codes)
+
+        refresh = metadata_edited.plan_observed_consensus()
+        self.assertTrue(refresh.preview().runtime_reset)
+        refresh.apply()
+        refreshed = SDKProject.open(target, context=self.context)
+        self.assertEqual(refreshed.config.runtime_status, RuntimeStatus.UNTESTED)
+        refreshed_manifest = ManifestDocument.read(target / "src" / "Index.art")
+        self.assertEqual(
+            refreshed_manifest.fields["Content"],
+            "License: MIT. Contact: https://github.com/example",
+        )
+        refreshed_codes = {
+            issue.code for issue in refreshed.validate(ValidationProfile.RELEASE).issues
+        }
+        self.assertNotIn("RELEASE_CONSENSUS_EVIDENCE_INVALID", refreshed_codes)
+        self.assertNotIn("RELEASE_CONSENSUS_MANIFEST_MISMATCH", refreshed_codes)
+        evidence = json.loads((target / ".acmk" / "import.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            evidence["manifest_sha256"],
+            hashlib.sha256((target / "src" / "Index.art").read_bytes()).hexdigest(),
+        )
+
+        evidence["consensus_profile"] = "forged-profile"
+        (target / ".acmk" / "import.json").write_text(json.dumps(evidence), encoding="utf-8")
+        tampered = SDKProject.open(target, context=self.context)
+        tampered_codes = {
+            issue.code for issue in tampered.validate(ValidationProfile.RELEASE).issues
+        }
+        self.assertIn("RELEASE_CONSENSUS_EVIDENCE_INVALID", tampered_codes)
+
+        evidence["consensus_profile"] = "generic-gv22-b23915225-v1"
+        evidence["manifest_sha256"] = "0" * 64
+        (target / ".acmk" / "import.json").write_text(json.dumps(evidence), encoding="utf-8")
+        digest_tampered = SDKProject.open(target, context=self.context)
+        digest_tampered_codes = {
+            issue.code for issue in digest_tampered.validate(ValidationProfile.RELEASE).issues
+        }
+        self.assertIn("RELEASE_CONSENSUS_EVIDENCE_INVALID", digest_tampered_codes)
+        self.assertNotIn("RELEASE_CONSENSUS_MANIFEST_MISMATCH", digest_tampered_codes)
+
+    def test_observed_consensus_rejects_linked_backup_directory(self) -> None:
+        target = self.root / "linked-consensus-backups"
+        builder = DraftProjectBuilder(
+            target,
+            identifier="linked-consensus-backups",
+            manifest=ManifestSpec(
+                title="Linked consensus backups",
+                description="Only synthetic test data",
+                changelog="Initial synthetic version",
+                game_version=GameVersion("22"),
+            ),
+            context=self.context,
+        )
+        builder.set_thumbnail(synthetic_jpeg())
+        builder.plan().apply()
+        plan = SDKProject.open(target, context=self.context).plan_observed_consensus()
+
+        external = self.root / "external-consensus-backups"
+        external.mkdir()
+        backup_root = target / ".acmk" / "backups"
+        if os.name == "nt":
+            completed = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(backup_root), str(external)],
+                check=False,
+                capture_output=True,
+                text=True,
+                shell=False,
+            )
+            if completed.returncode != 0:
+                self.skipTest("junction creation unavailable")
+        else:
+            try:
+                backup_root.symlink_to(external, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"symbolic links unavailable: {exc}")
+
+        with self.assertRaisesRegex(ACMKError, "symbolic links or junctions"):
+            plan.apply()
+        self.assertEqual(list(external.iterdir()), [])
+        unchanged = SDKProject.open(target, context=self.context)
+        self.assertEqual(unchanged.config.skeleton, acmk.SkeletonSource.COMMUNITY_DRAFT)
+
     def test_release_profile_and_isolated_preview(self) -> None:
         source = self.make_skeleton("ReleaseSkeleton")
         (source / "Ancient" / "payload.txt").write_bytes(b"synthetic")
@@ -509,6 +716,195 @@ class ImportAndProjectTests(SyntheticTempTestCase):
                 clean_launch=True,
                 save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
             )
+
+    def test_warning_baseline_allows_only_recurring_base_warnings(self) -> None:
+        source = self.make_skeleton("WarningBaselineSkeleton")
+        target = self.root / "warning-baseline-project"
+        ProjectImporter.plan(
+            source,
+            target,
+            identifier="warning-baseline-project",
+            context=self.context,
+        ).apply()
+        baseline = self.root / "BaselineLog.txt"
+        baseline.write_bytes(
+            (
+                "[11:00:00] Ancient Cities.1.9.3\n"
+                "[11:00:01] Enabling Mod: C:/BuiltIn/English (English)\n"
+                "[11:00:02] Warning - [1] Node: '/Ancient/Menu/Base' Property: 'TextInput'\n"
+            ).encode("utf-16-le")
+        )
+        runtime = self.root / "RuntimeWithBaseWarning.txt"
+        runtime.write_bytes(
+            (
+                "[12:00:00] Ancient Cities.1.9.3\n"
+                "[12:00:01] Enabling Mod: C:/Synthetic/123 (Synthetic SDK Mod)\n"
+                "[12:00:02.250] Warning - [1] Node: '/Ancient/Menu/Base' "
+                "Property: 'TextInput'\n"
+            ).encode("utf-16-le")
+        )
+        project = SDKProject.open(target, context=self.context)
+        plan = project.plan_runtime_test(
+            runtime,
+            baseline_log_path=baseline,
+            passed=True,
+            save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+            achievement_impact=acmk.AchievementImpact.DISABLED,
+            clean_launch=True,
+            save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+        )
+        preview = plan.preview().to_dict()
+        self.assertEqual(preview["warning_baseline"]["ignored_warnings"], 1)
+        self.assertEqual(preview["warning_baseline"]["unmatched_warnings"], 0)
+        preview_result = plan.preview()
+        assert preview_result.warning_baseline is not None
+        baseline_summary = preview_result.warning_baseline["log_summary"]
+        assert isinstance(baseline_summary, Mapping)
+        with self.assertRaises(TypeError):
+            baseline_summary["warnings"] = 99  # type: ignore[index]
+        serialized = preview_result.to_dict()
+        serialized["warning_baseline"]["log_summary"]["warnings"] = 99
+        self.assertEqual(preview_result.warning_baseline["log_summary"]["warnings"], 1)
+        result = plan.apply()
+        payload = json.loads(result.record_path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["schema_version"], 2)
+        self.assertEqual(payload["log_summary"]["warnings"], 1)
+        self.assertNotIn(str(baseline), json.dumps(payload))
+        Draft202012Validator(bundled_schema("acmk-runtime-test-v2.schema.json")).validate(payload)
+        codes = {
+            issue.code
+            for issue in SDKProject.open(target, context=self.context)
+            .validate(ValidationProfile.RELEASE)
+            .issues
+        }
+        self.assertNotIn("RELEASE_RUNTIME_EVIDENCE_INVALID", codes)
+
+    def test_warning_baseline_does_not_hide_candidate_warning_or_error(self) -> None:
+        source = self.make_skeleton("WarningDifferentialSkeleton")
+        target = self.root / "warning-differential-project"
+        ProjectImporter.plan(
+            source,
+            target,
+            identifier="warning-differential-project",
+            context=self.context,
+        ).apply()
+        baseline = self.root / "DifferentialBaseline.txt"
+        baseline.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                "Warning - recurring base warning\n"
+                "ERROR recurring base error\n"
+            ).encode("utf-16-le")
+        )
+        candidate_warning = self.root / "CandidateWarning.txt"
+        candidate_warning.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                "Enabling Mod: C:/Synthetic/123 (Synthetic SDK Mod)\n"
+                "Warning - recurring base warning\n"
+                "Warning - candidate mesh mismatch\n"
+            ).encode("utf-16-le")
+        )
+        project = SDKProject.open(target, context=self.context)
+        with self.assertRaisesRegex(ACMKError, "1 warnings not present in the warning baseline"):
+            project.plan_runtime_test(
+                candidate_warning,
+                baseline_log_path=baseline,
+                passed=True,
+                save_impact=acmk.SaveImpact.UNKNOWN,
+                achievement_impact=acmk.AchievementImpact.UNKNOWN,
+                clean_launch=True,
+                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            )
+
+        duplicate_warning = self.root / "DuplicateBaseWarning.txt"
+        duplicate_warning.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                "Enabling Mod: C:/Synthetic/123 (Synthetic SDK Mod)\n"
+                "Warning - recurring base warning\n"
+                "Warning - recurring base warning\n"
+            ).encode("utf-16-le")
+        )
+        with self.assertRaisesRegex(ACMKError, "1 warnings not present in the warning baseline"):
+            project.plan_runtime_test(
+                duplicate_warning,
+                baseline_log_path=baseline,
+                passed=True,
+                save_impact=acmk.SaveImpact.UNKNOWN,
+                achievement_impact=acmk.AchievementImpact.UNKNOWN,
+                clean_launch=True,
+                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            )
+
+        candidate_error = self.root / "CandidateError.txt"
+        candidate_error.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                "Enabling Mod: C:/Synthetic/123 (Synthetic SDK Mod)\n"
+                "ERROR recurring base error\n"
+            ).encode("utf-16-le")
+        )
+        with self.assertRaisesRegex(ACMKError, "1 errors or failures"):
+            project.plan_runtime_test(
+                candidate_error,
+                baseline_log_path=baseline,
+                passed=True,
+                save_impact=acmk.SaveImpact.UNKNOWN,
+                achievement_impact=acmk.AchievementImpact.UNKNOWN,
+                clean_launch=True,
+                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            )
+
+    def test_warning_baseline_must_predate_candidate_and_remain_unchanged(self) -> None:
+        source = self.make_skeleton("BaselineIntegritySkeleton")
+        target = self.root / "baseline-integrity-project"
+        ProjectImporter.plan(
+            source,
+            target,
+            identifier="baseline-integrity-project",
+            context=self.context,
+        ).apply()
+        runtime = self.root / "BaselineIntegrityRuntime.txt"
+        runtime.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                "Enabling Mod: C:/Synthetic/123 (Synthetic SDK Mod)\n"
+                "Warning - recurring base warning\n"
+            ).encode("utf-16-le")
+        )
+        invalid_baseline = self.root / "CandidateEnabledBaseline.txt"
+        invalid_baseline.write_bytes(runtime.read_bytes())
+        project = SDKProject.open(target, context=self.context)
+        with self.assertRaisesRegex(ACMKError, "baseline enables the tested mod"):
+            project.plan_runtime_test(
+                runtime,
+                baseline_log_path=invalid_baseline,
+                passed=True,
+                save_impact=acmk.SaveImpact.UNKNOWN,
+                achievement_impact=acmk.AchievementImpact.UNKNOWN,
+                clean_launch=True,
+                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            )
+
+        baseline = self.root / "StableBaseline.txt"
+        baseline.write_bytes(
+            ("Ancient Cities.1.9.3\nWarning - recurring base warning\n").encode("utf-16-le")
+        )
+        plan = project.plan_runtime_test(
+            runtime,
+            baseline_log_path=baseline,
+            passed=True,
+            save_impact=acmk.SaveImpact.UNKNOWN,
+            achievement_impact=acmk.AchievementImpact.UNKNOWN,
+            clean_launch=True,
+            save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+        )
+        baseline.write_bytes(
+            ("Ancient Cities.1.9.3\nWarning - changed base warning\n").encode("utf-16-le")
+        )
+        with self.assertRaisesRegex(SourceChangedError, "baseline Log.txt changed"):
+            plan.preview()
 
     def test_failed_runtime_record_matches_schema_and_reports_backups(self) -> None:
         source = self.make_skeleton("FailedEvidenceSkeleton")

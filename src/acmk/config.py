@@ -30,6 +30,7 @@ _LICENSE_EXPRESSION = re.compile(
 
 class SkeletonSource(StrEnum):
     GAME_GENERATED = "game-generated"
+    OBSERVED_CONSENSUS = "observed-consensus"
     COMMUNITY_DRAFT = "community-draft"
 
 

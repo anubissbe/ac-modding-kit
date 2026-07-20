@@ -35,8 +35,11 @@ the game's observable data interface into typed, repeatable, and auditable workf
   deterministic packages, and safe metadata changes;
 - a structured `acmk.toml` authoring project with separate runtime, authoring, state, and
   Workshop-staging directories;
-- atomic import of current game-generated skeletons and dry-run-first release staging;
+- atomic import of current game-generated skeletons, evidence-backed exact-build Generic
+  consensus reconciliation, and dry-run-first release staging;
 - lossless UTF-16LE ART/LOC documents, validated value objects, and immutable reports;
+- typed, dry-run-first standalone building scaffolds with model, icon, mask, localization,
+  manifest, relation, and current-base reference preflight;
 - a searchable offline knowledge base derived from audited public documentation;
 - three original Blender/FBX authoring examples for a building, plant, and resource;
 - JSON schemas, examples, strict typing, synthetic security and model tests, and GitHub
@@ -121,6 +124,7 @@ records, deterministic staging, and offline knowledge search. `acmk/py.typed` en
 editor and type-checker support.
 
 Read the [SDK guide](docs/sdk.md), [first safe mod tutorial](docs/tutorials/first-safe-mod.md),
+[standalone building guide](docs/standalone-buildings.md),
 [support matrix](docs/reference/support-matrix.md), and
 [compatibility policy](docs/compatibility-policy.md). Maintainers also have a
 [release checklist](docs/releasing.md).
@@ -149,6 +153,25 @@ all preserve the same preview-first rule. Staging never deploys to the game and 
 publishes to Steam; changing runtime source after a recorded test invalidates release
 readiness. Configuration rewrites return a backup path and use a canonical layout, so keep
 custom notes in documentation rather than unsupported `acmk.toml` keys or comments.
+
+If the current game's Generic creator is unavailable or silently fails, a `community-draft`
+may use the deliberately separate observed-consensus route on an explicitly supported exact
+build:
+
+```powershell
+acmk project reconcile-consensus C:\mods\my-project
+acmk project reconcile-consensus C:\mods\my-project --apply
+```
+
+This rewrites only the root manifest to the audited Generic layout, records sanitized
+`.acmk/import.json` evidence, labels the project `observed-consensus` rather than falsely
+claiming `game-generated`, and resets runtime status to `untested`. Unsupported builds and
+missing or altered evidence remain release blockers.
+
+The evidence hash is bound to the current root manifest. After an intentional canonical
+Description, Changelog, Content, or Steam ID update, run the same preview/apply pair again.
+For an already reconciled project this preserves valid metadata, refreshes the evidence with
+backups under `.acmk/backups`, resets runtime status, and requires a fresh in-game test.
 
 Release checks require the chosen license identifier and contact details to appear in the
 manifest Description or Content as well as the project metadata. These fields and a

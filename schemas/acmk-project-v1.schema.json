@@ -32,7 +32,7 @@
         "mod_type": {"type": "string", "pattern": "^(?=.*\\S)[^\\u0000]+$"},
         "license": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9.+-]*(?: (?:AND|OR|WITH) [A-Za-z0-9][A-Za-z0-9.+-]*)*$"},
         "contact": {"type": "string", "pattern": "^[^\\u0000]*$"},
-        "skeleton": {"enum": ["game-generated", "community-draft"]},
+        "skeleton": {"enum": ["game-generated", "observed-consensus", "community-draft"]},
         "runtime_status": {"enum": ["untested", "passed", "failed"]},
         "save_impact": {"enum": ["unknown", "none-observed", "new-save-recommended", "new-save-required"]},
         "achievement_impact": {"enum": ["unknown", "disabled", "none-observed"]},

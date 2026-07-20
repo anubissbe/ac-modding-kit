@@ -2216,7 +2216,7 @@ def canonical_manifest(
     game_version: str,
     mod_type: str,
     steam_mod_id: str,
-    content: str = "",
+    content: str | None = None,
 ) -> str:
     for field_name, field_value in (
         ("Title", title),
@@ -2230,7 +2230,9 @@ def canonical_manifest(
     if not _is_ascii_decimal(game_version):
         raise ModToolError("GameVersion must be an unsigned decimal integer such as 22")
     pair = normalise_steam_mod_id(steam_mod_id, allow_single=True)
-    blocks: list[tuple[str, str, str]] = [
+    if content is not None and not isinstance(content, str):
+        raise ModToolError("Content must be text or None")
+    blocks: list[tuple[str, str, str | None]] = [
         ("String", "Changelog", changelog),
         ("String", "Content", content),
         ("String", "Description", description),
@@ -2239,14 +2241,11 @@ def canonical_manifest(
         ("String", "Title", title),
         ("String", "Type", mod_type),
     ]
-    return (
-        "\n"
-        + "\n\n".join(
-            f'{kind}:\n{{\n\tName:"{_art_escape(name)}"\n\tValue:"{_art_escape(value)}"\n}}'
-            for kind, name, value in blocks
-        )
-        + "\n"
-    )
+    rendered: list[str] = []
+    for kind, name, value in blocks:
+        value_line = "" if value is None else f'\n\tValue:"{_art_escape(value)}"'
+        rendered.append(f'{kind}:\n{{\n\tName:"{_art_escape(name)}"{value_line}\n}}')
+    return "\n" + "\n\n".join(rendered) + "\n"
 
 
 def _normalise_metadata_update(key: str, value: str) -> tuple[str, str, str]:
