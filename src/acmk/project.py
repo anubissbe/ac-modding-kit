@@ -9,7 +9,6 @@ import platform
 import re
 import shutil
 import tempfile
-from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -36,7 +35,11 @@ from .manifest import ManifestDocument
 from .reports import ExecutionMode, Issue, Severity, ValidationProfile, ValidationReport
 
 _LEGACY_RUNTIME_TEST_SCHEMA_VERSION = 1
-_WARNING_BASELINE_ALGORITHM = "normalized-warning-line-multiset-v1"
+_LEGACY_WARNING_BASELINE_ALGORITHM = "normalized-warning-line-multiset-v1"
+_WARNING_BASELINE_ALGORITHM = "normalized-warning-signature-set-v1"
+_SUPPORTED_WARNING_BASELINE_ALGORITHMS = frozenset(
+    {_LEGACY_WARNING_BASELINE_ALGORITHM, _WARNING_BASELINE_ALGORITHM}
+)
 _OBSERVED_CONSENSUS_IMPORT_SCHEMA_VERSION = 2
 _OBSERVED_CONSENSUS_PROFILES = {
     (
@@ -1419,7 +1422,7 @@ class SDKProject:
 
         A passing record requires the current compatibility fingerprint and a
         log without lines classified as errors or failures. An optional clean
-        pre-candidate baseline may suppress only exact recurring warning lines.
+        pre-candidate baseline may suppress only recurring normalized warning signatures.
         Raw logs and their absolute paths are never copied into the project.
         """
 
@@ -2077,7 +2080,8 @@ class SDKProject:
                 }
                 if not isinstance(warning_baseline, dict) or set(warning_baseline) != baseline_keys:
                     raise ValueError("warning_baseline does not match the runtime-test schema")
-                if warning_baseline.get("algorithm") != _WARNING_BASELINE_ALGORITHM:
+                warning_baseline_algorithm = warning_baseline.get("algorithm")
+                if warning_baseline_algorithm not in _SUPPORTED_WARNING_BASELINE_ALGORITHMS:
                     raise ValueError("unsupported warning baseline algorithm")
                 if not _valid_sha256(warning_baseline.get("log_sha256")):
                     raise ValueError("warning baseline must contain a SHA-256 digest")
@@ -2095,7 +2099,11 @@ class SDKProject:
                 if (
                     unmatched_warnings != 0
                     or ignored_warnings != log_summary["warnings"]
-                    or ignored_warnings > baseline_summary["warnings"]
+                    or (
+                        warning_baseline_algorithm == _LEGACY_WARNING_BASELINE_ALGORITHM
+                        and ignored_warnings > baseline_summary["warnings"]
+                    )
+                    or (ignored_warnings > 0 and baseline_summary["warnings"] == 0)
                 ):
                     raise ValueError(
                         "passing runtime evidence contains warnings outside the baseline"
@@ -2336,12 +2344,12 @@ def _runtime_blockers(
 
 
 def _warning_differential(runtime_text: str, baseline_text: str) -> tuple[int, int]:
-    """Return exact baseline-matched and remaining runtime warning occurrences."""
+    """Return baseline-signature-matched and remaining runtime warning occurrences."""
 
-    runtime_warnings = Counter(_normalised_warning_lines(runtime_text))
-    baseline_warnings = Counter(_normalised_warning_lines(baseline_text))
-    ignored = sum((runtime_warnings & baseline_warnings).values())
-    return ignored, sum(runtime_warnings.values()) - ignored
+    runtime_warnings = tuple(_normalised_warning_lines(runtime_text))
+    baseline_signatures = set(_normalised_warning_lines(baseline_text))
+    ignored = sum(warning in baseline_signatures for warning in runtime_warnings)
+    return ignored, len(runtime_warnings) - ignored
 
 
 def _normalised_warning_lines(text: str) -> Iterable[str]:
@@ -2354,7 +2362,14 @@ def _normalised_warning_lines(text: str) -> Iterable[str]:
             line,
             count=1,
         )
-        yield without_timestamp.strip()
+        normalized = without_timestamp.strip()
+        normalized = re.sub(
+            r"^(Warning - )\[\d+\](?=\s)",
+            r"\1[#]",
+            normalized,
+            count=1,
+        )
+        yield normalized
 
 
 def _save_impact_evidence_problem(

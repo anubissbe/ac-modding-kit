@@ -43,7 +43,12 @@
         "unmatched_warnings"
       ],
       "properties": {
-        "algorithm": {"const": "normalized-warning-line-multiset-v1"},
+        "algorithm": {
+          "enum": [
+            "normalized-warning-line-multiset-v1",
+            "normalized-warning-signature-set-v1"
+          ]
+        },
         "log_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "log_summary": {"$ref": "#/$defs/logSummary"},
         "ignored_warnings": {"type": "integer", "minimum": 0},

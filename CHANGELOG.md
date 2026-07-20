@@ -56,6 +56,10 @@ practical.
 
 ### Fixed
 
+- Treat repeated occurrences of an allowed clean-launch warning signature, including changing
+  engine-generated leading `Warning - [n]` ordinals, as the same baseline warning without
+  weakening blocking for unrelated warnings or errors; legacy occurrence-counted evidence remains
+  valid.
 - Generate standalone building `Index.en.loc` files with the Ancient Cities 1.9.3
   runtime-proven UTF-16LE BOM, LF-only line endings, and no terminal newline.
 - Keep default SDK CLI errors as unwrapped pretty JSON; reserve versioned envelopes for
