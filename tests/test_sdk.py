@@ -769,6 +769,10 @@ class ImportAndProjectTests(SyntheticTempTestCase):
         payload = json.loads(result.record_path.read_text(encoding="utf-8"))
         self.assertEqual(payload["schema_version"], 2)
         self.assertEqual(payload["log_summary"]["warnings"], 1)
+        self.assertEqual(
+            payload["warning_baseline"]["algorithm"],
+            "normalized-warning-signature-set-v1",
+        )
         self.assertNotIn(str(baseline), json.dumps(payload))
         Draft202012Validator(bundled_schema("acmk-runtime-test-v2.schema.json")).validate(payload)
         codes = {
@@ -778,6 +782,98 @@ class ImportAndProjectTests(SyntheticTempTestCase):
             .issues
         }
         self.assertNotIn("RELEASE_RUNTIME_EVIDENCE_INVALID", codes)
+
+        payload["warning_baseline"]["algorithm"] = "normalized-warning-line-multiset-v1"
+        result.record_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        Draft202012Validator(bundled_schema("acmk-runtime-test-v2.schema.json")).validate(payload)
+        legacy_codes = {
+            issue.code
+            for issue in SDKProject.open(target, context=self.context)
+            .validate(ValidationProfile.RELEASE)
+            .issues
+        }
+        self.assertNotIn("RELEASE_RUNTIME_EVIDENCE_INVALID", legacy_codes)
+
+    def test_warning_baseline_normalizes_only_leading_engine_occurrence_ordinal(self) -> None:
+        source = self.make_skeleton("WarningOrdinalSkeleton")
+        target = self.root / "warning-ordinal-project"
+        ProjectImporter.plan(
+            source,
+            target,
+            identifier="warning-ordinal-project",
+            context=self.context,
+        ).apply()
+        baseline = self.root / "OrdinalBaseline.txt"
+        baseline.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                "Warning - [1] Node: '/Ancient/Menu/Base' Property: 'TextInput [7]'\n"
+            ).encode("utf-16-le")
+        )
+        runtime = self.root / "OrdinalRuntime.txt"
+        runtime.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                "Enabling Mod: C:/Synthetic/123 (Synthetic SDK Mod)\n"
+                "Warning - [1] Node: '/Ancient/Menu/Base' Property: 'TextInput [7]'\n"
+                "Warning - [2] Node: '/Ancient/Menu/Base' Property: 'TextInput [7]'\n"
+                "Warning - [3] Node: '/Ancient/Menu/Base' Property: 'TextInput [7]'\n"
+                "Warning - [4] Node: '/Ancient/Menu/Base' Property: 'TextInput [7]'\n"
+                "Warning - [5] Node: '/Ancient/Menu/Base' Property: 'TextInput [7]'\n"
+            ).encode("utf-16-le")
+        )
+        project = SDKProject.open(target, context=self.context)
+        plan = project.plan_runtime_test(
+            runtime,
+            baseline_log_path=baseline,
+            passed=True,
+            save_impact=acmk.SaveImpact.UNKNOWN,
+            achievement_impact=acmk.AchievementImpact.UNKNOWN,
+            clean_launch=True,
+            save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+        )
+        preview = plan.preview().to_dict()
+        self.assertEqual(preview["warning_baseline"]["ignored_warnings"], 5)
+        self.assertEqual(preview["warning_baseline"]["unmatched_warnings"], 0)
+
+        changed_payload = self.root / "ChangedOrdinalPayload.txt"
+        changed_payload.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                "Enabling Mod: C:/Synthetic/123 (Synthetic SDK Mod)\n"
+                "Warning - [6] Node: '/Ancient/Menu/Base' Property: 'TextInput [8]'\n"
+            ).encode("utf-16-le")
+        )
+        with self.assertRaisesRegex(ACMKError, "1 warnings not present in the warning baseline"):
+            project.plan_runtime_test(
+                changed_payload,
+                baseline_log_path=baseline,
+                passed=True,
+                save_impact=acmk.SaveImpact.UNKNOWN,
+                achievement_impact=acmk.AchievementImpact.UNKNOWN,
+                clean_launch=True,
+                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            )
+
+        result = plan.apply()
+        payload = json.loads(result.record_path.read_text(encoding="utf-8"))
+        codes = {
+            issue.code
+            for issue in SDKProject.open(target, context=self.context)
+            .validate(ValidationProfile.RELEASE)
+            .issues
+        }
+        self.assertNotIn("RELEASE_RUNTIME_EVIDENCE_INVALID", codes)
+
+        payload["warning_baseline"]["algorithm"] = "normalized-warning-line-multiset-v1"
+        result.record_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        legacy_codes = {
+            issue.code
+            for issue in SDKProject.open(target, context=self.context)
+            .validate(ValidationProfile.RELEASE)
+            .issues
+        }
+        self.assertIn("RELEASE_RUNTIME_EVIDENCE_INVALID", legacy_codes)
 
     def test_warning_baseline_does_not_hide_candidate_warning_or_error(self) -> None:
         source = self.make_skeleton("WarningDifferentialSkeleton")
@@ -826,16 +922,18 @@ class ImportAndProjectTests(SyntheticTempTestCase):
                 "Warning - recurring base warning\n"
             ).encode("utf-16-le")
         )
-        with self.assertRaisesRegex(ACMKError, "1 warnings not present in the warning baseline"):
-            project.plan_runtime_test(
-                duplicate_warning,
-                baseline_log_path=baseline,
-                passed=True,
-                save_impact=acmk.SaveImpact.UNKNOWN,
-                achievement_impact=acmk.AchievementImpact.UNKNOWN,
-                clean_launch=True,
-                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
-            )
+        duplicate_plan = project.plan_runtime_test(
+            duplicate_warning,
+            baseline_log_path=baseline,
+            passed=True,
+            save_impact=acmk.SaveImpact.UNKNOWN,
+            achievement_impact=acmk.AchievementImpact.UNKNOWN,
+            clean_launch=True,
+            save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+        )
+        duplicate_preview = duplicate_plan.preview().to_dict()
+        self.assertEqual(duplicate_preview["warning_baseline"]["ignored_warnings"], 2)
+        self.assertEqual(duplicate_preview["warning_baseline"]["unmatched_warnings"], 0)
 
         candidate_error = self.root / "CandidateError.txt"
         candidate_error.write_bytes(

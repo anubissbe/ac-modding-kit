@@ -11,8 +11,10 @@ editors and integrations do not need a source checkout.
 - `acmk-report-envelope-v1.schema.json` validates JSON emitted by new SDK commands when
   `--json` is supplied.
 - `acmk-runtime-test-v1.schema.json` validates sanitized manual runtime-test evidence.
-- `acmk-runtime-test-v2.schema.json` adds an occurrence-counted, warning-only clean-launch
-  baseline differential. Existing v1 evidence remains supported.
+- `acmk-runtime-test-v2.schema.json` adds a versioned, warning-only clean-launch baseline
+  differential. Existing occurrence-counted v2 evidence remains supported; new records use
+  repeat-insensitive normalized warning-signature membership. Existing v1 evidence also remains
+  supported.
 
 `ProjectConfig` remains authoritative for cross-field rules that JSON Schema cannot express
 portably, including case-insensitive relation uniqueness, dependency/conflict overlap,

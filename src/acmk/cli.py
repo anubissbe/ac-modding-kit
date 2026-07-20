@@ -133,8 +133,9 @@ def build_parser() -> argparse.ArgumentParser:
     project_test.add_argument(
         "--baseline-log",
         help=(
-            "optional pre-candidate clean-launch log; exact recurring warning lines are "
-            "ignored, while new warnings and all runtime errors remain blocking"
+            "optional pre-candidate clean-launch log; normalized recurring warning signatures "
+            "are ignored regardless of repeat count, while new signatures and all runtime "
+            "errors remain blocking"
         ),
     )
     project_test.add_argument("--result", choices=("passed", "failed"), required=True)

@@ -154,12 +154,14 @@ of every runtime source file, so later edits invalidate release readiness. Claim
 `none-observed` save impact requires a test with an existing disposable save.
 
 If the unmodded game emits a reproducible warning, save a separate clean-launch log before
-enabling the candidate and pass it with `--baseline-log`. ACMK removes timestamps, compares
-warning lines as an exact occurrence-counted set, and records both hashes plus the sanitized
-differential. The baseline must identify the same game version and must not enable the tested
-mod. New warning text, excess duplicate warnings, and every runtime error or failure remain
-blocking. Raw logs and private absolute paths are still excluded from the project. Warning-free
-records keep the v1 evidence format; supplying a baseline selects v2.
+enabling the candidate and pass it with `--baseline-log`. ACMK removes timestamps and the
+engine's leading `Warning - [n]` occurrence ordinal, then compares normalized warning-signature
+membership and records both hashes plus the sanitized differential. Repeated occurrences of an
+allowed baseline signature do not block a passing test. The baseline must identify the same game
+version and must not enable the tested mod; new warning signatures and every runtime error or
+failure remain blocking. Raw logs and private absolute paths are still excluded from the project.
+Warning-free records keep the v1 evidence format; supplying a baseline selects v2. Existing v2
+records using the legacy occurrence-counted algorithm remain supported.
 
 Staging creates an isolated Workshop directory; it never deploys to the game and never
 uploads to Steam. Release validation additionally requires resolved license/contact data in
