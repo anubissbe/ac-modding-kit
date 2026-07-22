@@ -99,20 +99,25 @@ class ConstructionStage:
 
     name: str
     resource: EngineReference | None
-    count: int
+    count: int | float
     models: tuple[BuildingModel, ...]
 
     def __post_init__(self) -> None:
         _validate_stage_name(self.name)
         if self.resource is not None:
             _validate_external_reference(self.resource, label="construction resource")
-        if (
-            isinstance(self.count, bool)
-            or not isinstance(self.count, int)
-            or not 1 <= self.count <= _MAX_CONSTRUCTION_STAGE_COUNT
-        ):
+        valid_count = not isinstance(self.count, bool) and (
+            (isinstance(self.count, int) and 0 < self.count <= _MAX_CONSTRUCTION_STAGE_COUNT)
+            or (
+                isinstance(self.count, float)
+                and math.isfinite(self.count)
+                and 0 < self.count <= _MAX_CONSTRUCTION_STAGE_COUNT
+            )
+        )
+        if not valid_count:
             raise ContractError(
-                f"construction stage count must be between 1 and {_MAX_CONSTRUCTION_STAGE_COUNT}"
+                "construction stage count must be a positive finite number no greater than "
+                f"{_MAX_CONSTRUCTION_STAGE_COUNT}"
             )
         _validate_model_snapshot(self.models, label=f"construction stage {self.name}")
 
@@ -833,7 +838,7 @@ def _render_building_art(spec: BuildingSpec) -> str:
         f"'{stage.resource.value if stage.resource is not None else ''}'"
         for stage in spec.construction_stages
     )
-    counts = ",".join(str(stage.count) for stage in spec.construction_stages)
+    counts = ",".join(_number(stage.count) for stage in spec.construction_stages)
     requirements = ",".join(f"'{item.value}'" for item in spec.requirements)
     requirement_percent = ",".join(_number(value) for value in spec.requirement_percent)
     _line(lines, 0, "Entity/Construction/Building:")

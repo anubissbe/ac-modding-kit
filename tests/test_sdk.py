@@ -44,7 +44,7 @@ from acmk import (
     ValidationProfile,
 )
 from acmk.cli import main as cli_main
-from acmk.project import FileSnapshot
+from acmk.project import FileSnapshot, _capture_source_tree
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -476,7 +476,9 @@ class ImportAndProjectTests(SyntheticTempTestCase):
             save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
             achievement_impact=acmk.AchievementImpact.DISABLED,
             clean_launch=True,
+            tested_source=target / "src",
             save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
         ).apply()
         tested = SDKProject.open(target, context=self.context)
         self.assertEqual(tested.config.runtime_status, RuntimeStatus.PASSED)
@@ -529,7 +531,9 @@ class ImportAndProjectTests(SyntheticTempTestCase):
             save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
             achievement_impact=acmk.AchievementImpact.DISABLED,
             clean_launch=True,
+            tested_source=target / "src",
             save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
         ).apply()
         tested_again = SDKProject.open(target, context=self.context)
         manifest_before_rejected_update = (target / "src" / "Index.art").read_bytes()
@@ -669,14 +673,16 @@ class ImportAndProjectTests(SyntheticTempTestCase):
             save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
             achievement_impact=acmk.AchievementImpact.DISABLED,
             clean_launch=True,
+            tested_source=target / "src",
             save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
         )
         self.assertEqual(runtime_plan.preview().status, RuntimeStatus.PASSED)
         runtime_plan.apply()
         runtime_record = json.loads(
             (target / ".acmk" / "runtime-test.json").read_text(encoding="utf-8")
         )
-        Draft202012Validator(bundled_schema("acmk-runtime-test-v1.schema.json")).validate(
+        Draft202012Validator(bundled_schema("acmk-runtime-test-v3.schema.json")).validate(
             runtime_record
         )
         ready = SDKProject.open(target, context=self.context)
@@ -685,15 +691,290 @@ class ImportAndProjectTests(SyntheticTempTestCase):
         self.assertFalse(ready.layout.distribution_root.joinpath("Mod.zip").exists())
         self.assertGreater(release.archive_size, 0)
         self.assertEqual(len(release.archive_sha256), 64)
+        preview_payload = release.to_dict()
+        for legacy_key in (
+            "mode",
+            "output_directory",
+            "archive",
+            "backup",
+            "validation",
+        ):
+            self.assertIn(legacy_key, preview_payload)
+        self.assertEqual(
+            [artifact.name for artifact in release.artifacts],
+            ["Index.art", "Thumbnail.jpg", "Mod.zip"],
+        )
+        self.assertEqual(
+            list(preview_payload["artifacts"]),
+            ["Index.art", "Thumbnail.jpg", "Mod.zip"],
+        )
+        for artifact_name in ("Index.art", "Thumbnail.jpg"):
+            source_bytes = (ready.layout.source_root / artifact_name).read_bytes()
+            artifact = preview_payload["artifacts"][artifact_name]
+            self.assertEqual(
+                artifact["path"],
+                str(ready.layout.distribution_root / artifact_name),
+            )
+            self.assertEqual(artifact["bytes"], len(source_bytes))
+            self.assertEqual(artifact["sha256"], hashlib.sha256(source_bytes).hexdigest())
+        self.assertEqual(
+            preview_payload["artifacts"]["Mod.zip"],
+            {
+                "path": str(ready.layout.distribution_root / "Mod.zip"),
+                "bytes": preview_payload["archive"]["bytes"],
+                "sha256": preview_payload["archive"]["sha256"],
+            },
+        )
+        self.assertEqual(preview_payload["archive"]["bytes"], release.archive_size)
+        self.assertEqual(preview_payload["archive"]["sha256"], release.archive_sha256)
+        self.assertEqual(preview_payload["archive"]["members"], list(release.members))
         applied = release_plan.apply()
         self.assertEqual(applied.archive_sha256, release.archive_sha256)
         self.assertTrue((ready.layout.distribution_root / "Index.art").is_file())
         self.assertTrue((ready.layout.distribution_root / "Thumbnail.jpg").is_file())
         self.assertTrue((ready.layout.distribution_root / "Mod.zip").is_file())
+        applied_payload = applied.to_dict()
+        self.assertEqual(applied_payload["artifacts"], preview_payload["artifacts"])
+        for artifact_name, artifact in applied_payload["artifacts"].items():
+            artifact_bytes = (ready.layout.distribution_root / artifact_name).read_bytes()
+            self.assertEqual(artifact["bytes"], len(artifact_bytes))
+            self.assertEqual(artifact["sha256"], hashlib.sha256(artifact_bytes).hexdigest())
         replaced = ready.plan_release().apply(replace=True)
         self.assertIsNotNone(replaced.backup)
         assert replaced.backup is not None
         self.assertTrue(replaced.backup.is_dir())
+        self.assertEqual(replaced.to_dict()["artifacts"], preview_payload["artifacts"])
+
+    def test_runtime_v3_hashes_explicit_loose_root_and_ignores_empty_mod_hms(self) -> None:
+        source = self.make_skeleton("ExplicitTestedSourceSkeleton")
+        (source / "Ancient" / "payload.txt").write_bytes(b"tested payload")
+        target = self.root / "explicit-tested-source-project"
+        ProjectImporter.plan(
+            source,
+            target,
+            identifier="explicit-tested-source-project",
+            context=self.context,
+        ).apply()
+        (source / "Mod.hms").write_bytes(b"")
+        log = self.root / "ExplicitTestedSourceLog.txt"
+        log.write_bytes(
+            ("Ancient Cities.1.9.3\nEnabling Mod: C:/Synthetic/123 (Synthetic SDK Mod)\n").encode(
+                "utf-16-le"
+            )
+        )
+        plan = SDKProject.open(target, context=self.context).plan_runtime_test(
+            log,
+            tested_source=source,
+            passed=True,
+            save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+            achievement_impact=acmk.AchievementImpact.DISABLED,
+            clean_launch=True,
+            save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
+        )
+        preview = plan.preview()
+        self.assertEqual(preview.tested_source, source)
+        self.assertEqual(preview.source_fingerprint.files, 3)
+        (source / "Mod.hms").unlink()
+        result = plan.apply()
+        payload = json.loads(result.record_path.read_text(encoding="utf-8"))
+        runtime_schema = Draft202012Validator(bundled_schema("acmk-runtime-test-v3.schema.json"))
+        runtime_schema.validate(payload)
+        for key in ("lines", "mods_enabled"):
+            invalid = json.loads(json.dumps(payload))
+            invalid["log_summary"][key] = 0
+            self.assertFalse(runtime_schema.is_valid(invalid), key)
+        warning_without_baseline = json.loads(json.dumps(payload))
+        warning_without_baseline["log_summary"]["warnings"] = 1
+        self.assertFalse(runtime_schema.is_valid(warning_without_baseline))
+        self.assertEqual(payload["schema_version"], 3)
+        self.assertEqual(payload["source_fingerprint"]["algorithm"], "sha256-loose-mod-v1")
+        self.assertEqual(
+            payload["environment"]["save_persistence"],
+            "manual-save-reload-passed",
+        )
+        self.assertNotIn(str(source), json.dumps(payload))
+        codes = {
+            issue.code
+            for issue in SDKProject.open(target, context=self.context)
+            .validate(ValidationProfile.RELEASE)
+            .issues
+        }
+        self.assertNotIn("RELEASE_SOURCE_CHANGED_AFTER_TEST", codes)
+        self.assertNotIn("RELEASE_RUNTIME_EVIDENCE_INVALID", codes)
+        self.assertNotIn("RELEASE_RUNTIME_EVIDENCE_MIGRATION_REQUIRED", codes)
+
+    def test_release_blocks_when_explicit_tested_loose_root_differs_from_src(self) -> None:
+        source = self.make_skeleton("MismatchedTestedSourceSkeleton")
+        (source / "Ancient" / "payload.txt").write_bytes(b"canonical payload")
+        target = self.root / "mismatched-tested-source-project"
+        ProjectImporter.plan(
+            source,
+            target,
+            identifier="mismatched-tested-source-project",
+            context=self.context,
+        ).apply()
+        (source / "Ancient" / "payload.txt").write_bytes(b"different deployed payload")
+        log = self.root / "MismatchedTestedSourceLog.txt"
+        log.write_bytes(
+            ("Ancient Cities.1.9.3\nEnabling Mod: C:/Synthetic/123 (Synthetic SDK Mod)\n").encode(
+                "utf-16-le"
+            )
+        )
+        SDKProject.open(target, context=self.context).plan_runtime_test(
+            log,
+            tested_source=source,
+            passed=True,
+            save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+            achievement_impact=acmk.AchievementImpact.DISABLED,
+            clean_launch=True,
+            save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
+        ).apply()
+        codes = {
+            issue.code
+            for issue in SDKProject.open(target, context=self.context)
+            .validate(ValidationProfile.RELEASE)
+            .issues
+        }
+        self.assertIn("RELEASE_SOURCE_CHANGED_AFTER_TEST", codes)
+        self.assertNotIn("RELEASE_RUNTIME_EVIDENCE_INVALID", codes)
+
+    def test_runtime_v3_rejects_unscoped_tested_source_files_and_bad_persistence(self) -> None:
+        source = self.make_skeleton("StrictTestedSourceSkeleton")
+        target = self.root / "strict-tested-source-project"
+        ProjectImporter.plan(
+            source,
+            target,
+            identifier="strict-tested-source-project",
+            context=self.context,
+        ).apply()
+        log = self.root / "StrictTestedSourceLog.txt"
+        log.write_bytes(
+            ("Ancient Cities.1.9.3\nEnabling Mod: C:/Synthetic/123 (Synthetic SDK Mod)\n").encode(
+                "utf-16-le"
+            )
+        )
+        project = SDKProject.open(target, context=self.context)
+        (source / "Mod.hms").write_bytes(b"game state")
+        with self.assertRaisesRegex(ACMKError, "only an empty game-managed Mod.hms"):
+            project.plan_runtime_test(
+                log,
+                tested_source=source,
+                passed=True,
+                save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+                achievement_impact=acmk.AchievementImpact.DISABLED,
+                clean_launch=True,
+                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
+            )
+        (source / "Mod.hms").unlink()
+        (source / "notes.txt").write_text("not runtime content", encoding="utf-8")
+        with self.assertRaisesRegex(ACMKError, "unexpected root entries"):
+            project.plan_runtime_test(
+                log,
+                tested_source=source,
+                passed=True,
+                save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+                achievement_impact=acmk.AchievementImpact.DISABLED,
+                clean_launch=True,
+                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
+            )
+        (source / "notes.txt").unlink()
+        with self.assertRaisesRegex(ACMKError, "manual-save-reload-passed"):
+            project.plan_runtime_test(
+                log,
+                tested_source=source,
+                passed=True,
+                save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+                achievement_impact=acmk.AchievementImpact.DISABLED,
+                clean_launch=True,
+                save_type=acmk.RuntimeSaveType.EXISTING_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.NOT_TESTED,
+            )
+        with self.assertRaisesRegex(ContractError, "no-save.*not-applicable"):
+            project.plan_runtime_test(
+                log,
+                tested_source=source,
+                passed=False,
+                save_impact=acmk.SaveImpact.UNKNOWN,
+                achievement_impact=acmk.AchievementImpact.UNKNOWN,
+                clean_launch=False,
+                save_type=acmk.RuntimeSaveType.NO_SAVE,
+                save_persistence=acmk.SavePersistence.FAILED,
+            )
+
+    def test_v1_and_v2_runtime_evidence_stays_readable_but_requires_v3_rerecord(self) -> None:
+        source = self.make_skeleton("LegacyRuntimeEvidenceSkeleton")
+        target = self.root / "legacy-runtime-evidence-project"
+        ProjectImporter.plan(
+            source,
+            target,
+            identifier="legacy-runtime-evidence-project",
+            context=self.context,
+        ).apply()
+        log = self.root / "LegacyRuntimeEvidenceLog.txt"
+        log.write_bytes(
+            ("Ancient Cities.1.9.3\nEnabling Mod: C:/Synthetic/123 (Synthetic SDK Mod)\n").encode(
+                "utf-16-le"
+            )
+        )
+        result = (
+            SDKProject.open(target, context=self.context)
+            .plan_runtime_test(
+                log,
+                tested_source=source,
+                passed=True,
+                save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+                achievement_impact=acmk.AchievementImpact.DISABLED,
+                clean_launch=True,
+                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
+            )
+            .apply()
+        )
+        v1 = json.loads(result.record_path.read_text(encoding="utf-8"))
+        v1["schema_version"] = 1
+        del v1["environment"]["save_persistence"]
+        v1["source_fingerprint"] = _capture_source_tree(target / "src")[1].to_dict()
+        Draft202012Validator(bundled_schema("acmk-runtime-test-v1.schema.json")).validate(v1)
+        result.record_path.write_text(json.dumps(v1, indent=2) + "\n", encoding="utf-8")
+        v1_codes = {
+            issue.code
+            for issue in SDKProject.open(target, context=self.context)
+            .validate(ValidationProfile.RELEASE)
+            .issues
+        }
+        self.assertIn("RELEASE_RUNTIME_EVIDENCE_MIGRATION_REQUIRED", v1_codes)
+        self.assertNotIn("RELEASE_RUNTIME_EVIDENCE_INVALID", v1_codes)
+        self.assertNotIn("RELEASE_SOURCE_CHANGED_AFTER_TEST", v1_codes)
+
+        v2 = dict(v1)
+        v2["schema_version"] = 2
+        v2["warning_baseline"] = {
+            "algorithm": "normalized-warning-signature-set-v1",
+            "log_sha256": "0" * 64,
+            "log_summary": {
+                "lines": 1,
+                "warnings": 0,
+                "errors_or_failures": 0,
+                "mods_enabled": 0,
+            },
+            "ignored_warnings": 0,
+            "unmatched_warnings": 0,
+        }
+        Draft202012Validator(bundled_schema("acmk-runtime-test-v2.schema.json")).validate(v2)
+        result.record_path.write_text(json.dumps(v2, indent=2) + "\n", encoding="utf-8")
+        v2_codes = {
+            issue.code
+            for issue in SDKProject.open(target, context=self.context)
+            .validate(ValidationProfile.RELEASE)
+            .issues
+        }
+        self.assertIn("RELEASE_RUNTIME_EVIDENCE_MIGRATION_REQUIRED", v2_codes)
+        self.assertNotIn("RELEASE_RUNTIME_EVIDENCE_INVALID", v2_codes)
+        self.assertNotIn("RELEASE_SOURCE_CHANGED_AFTER_TEST", v2_codes)
 
     def test_passing_runtime_record_rejects_error_log(self) -> None:
         source = self.make_skeleton("FailedLogSkeleton")
@@ -714,8 +995,155 @@ class ImportAndProjectTests(SyntheticTempTestCase):
                 save_impact=acmk.SaveImpact.UNKNOWN,
                 achievement_impact=acmk.AchievementImpact.UNKNOWN,
                 clean_launch=True,
+                tested_source=target / "src",
                 save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
             )
+
+    def test_exact_achievement_warning_is_expected_only_when_impact_is_disabled(self) -> None:
+        source = self.make_skeleton("ExpectedAchievementWarningSkeleton")
+        target = self.root / "expected-achievement-warning-project"
+        ProjectImporter.plan(
+            source,
+            target,
+            identifier="expected-achievement-warning-project",
+            context=self.context,
+        ).apply()
+        log = self.root / "ExpectedAchievementWarning.txt"
+        log.write_bytes(
+            (
+                "[12:00:00] Ancient Cities.1.9.3\n"
+                "[12:00:01] Warning - This enabled Mod has *.art files that disables "
+                "Achievements: [3768682609] (Synthetic SDK Mod)\n"
+                "[12:00:02] Enabling Mod: C:/Synthetic/3768682609 (Synthetic SDK Mod)\n"
+            ).encode("utf-16-le")
+        )
+        project = SDKProject.open(target, context=self.context)
+        with self.assertRaisesRegex(ACMKError, "contains 1 warnings"):
+            project.plan_runtime_test(
+                log,
+                passed=True,
+                save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+                achievement_impact=acmk.AchievementImpact.NONE_OBSERVED,
+                clean_launch=True,
+                tested_source=target / "src",
+                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
+            )
+
+        plan = project.plan_runtime_test(
+            log,
+            passed=True,
+            save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+            achievement_impact=acmk.AchievementImpact.DISABLED,
+            clean_launch=True,
+            tested_source=target / "src",
+            save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
+        )
+        self.assertEqual(plan.preview().log_summary["warnings"], 0)
+        result = plan.apply()
+        payload = json.loads(result.record_path.read_text(encoding="utf-8"))
+        Draft202012Validator(bundled_schema("acmk-runtime-test-v3.schema.json")).validate(payload)
+        self.assertEqual(payload["log_summary"]["warnings"], 0)
+        codes = {
+            issue.code
+            for issue in SDKProject.open(target, context=self.context)
+            .validate(ValidationProfile.RELEASE)
+            .issues
+        }
+        self.assertNotIn("RELEASE_RUNTIME_EVIDENCE_INVALID", codes)
+
+    def test_achievement_warning_allowance_is_exact_and_preserves_baseline_strictness(
+        self,
+    ) -> None:
+        source = self.make_skeleton("StrictAchievementWarningSkeleton")
+        target = self.root / "strict-achievement-warning-project"
+        ProjectImporter.plan(
+            source,
+            target,
+            identifier="strict-achievement-warning-project",
+            context=self.context,
+        ).apply()
+        baseline = self.root / "StrictAchievementBaseline.txt"
+        baseline.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                "Enabling Mod: C:/BuiltIn/English (English)\n"
+                "Warning - recurring base warning\n"
+            ).encode("utf-16-le")
+        )
+        runtime = self.root / "StrictAchievementRuntime.txt"
+        runtime.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                "Warning - This enabled Mod has *.art files that disables Achievements: "
+                "[3768682609] (Synthetic SDK Mod)\n"
+                "Enabling Mod: C:/Synthetic/3768682609 (Synthetic SDK Mod)\n"
+                "Warning - recurring base warning\n"
+                "Warning - candidate mesh mismatch\n"
+            ).encode("utf-16-le")
+        )
+        project = SDKProject.open(target, context=self.context)
+        with self.assertRaisesRegex(ACMKError, "1 warnings not present in the warning baseline"):
+            project.plan_runtime_test(
+                runtime,
+                baseline_log_path=baseline,
+                passed=True,
+                save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+                achievement_impact=acmk.AchievementImpact.DISABLED,
+                clean_launch=True,
+                tested_source=target / "src",
+                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
+            )
+
+        wrong_title = self.root / "WrongAchievementTitle.txt"
+        wrong_title.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                "Warning - This enabled Mod has *.art files that disables Achievements: "
+                "[3768682609] (Another Mod)\n"
+                "Enabling Mod: C:/Synthetic/3768682609 (Synthetic SDK Mod)\n"
+            ).encode("utf-16-le")
+        )
+        with self.assertRaisesRegex(ACMKError, "contains 1 warnings"):
+            project.plan_runtime_test(
+                wrong_title,
+                passed=True,
+                save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+                achievement_impact=acmk.AchievementImpact.DISABLED,
+                clean_launch=True,
+                tested_source=target / "src",
+                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
+            )
+
+        clean_runtime = self.root / "ExpectedAchievementWithBaseline.txt"
+        clean_runtime.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                "Warning - This enabled Mod has *.art files that disables Achievements: "
+                "[3768682609] (Synthetic SDK Mod)\n"
+                "Enabling Mod: C:/Synthetic/3768682609 (Synthetic SDK Mod)\n"
+                "Warning - recurring base warning\n"
+            ).encode("utf-16-le")
+        )
+        preview = project.plan_runtime_test(
+            clean_runtime,
+            baseline_log_path=baseline,
+            passed=True,
+            save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+            achievement_impact=acmk.AchievementImpact.DISABLED,
+            clean_launch=True,
+            tested_source=target / "src",
+            save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
+        ).preview()
+        self.assertEqual(preview.log_summary["warnings"], 1)
+        assert preview.warning_baseline is not None
+        self.assertEqual(preview.warning_baseline["ignored_warnings"], 1)
+        self.assertEqual(preview.warning_baseline["unmatched_warnings"], 0)
 
     def test_warning_baseline_allows_only_recurring_base_warnings(self) -> None:
         source = self.make_skeleton("WarningBaselineSkeleton")
@@ -751,7 +1179,9 @@ class ImportAndProjectTests(SyntheticTempTestCase):
             save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
             achievement_impact=acmk.AchievementImpact.DISABLED,
             clean_launch=True,
+            tested_source=target / "src",
             save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
         )
         preview = plan.preview().to_dict()
         self.assertEqual(preview["warning_baseline"]["ignored_warnings"], 1)
@@ -767,14 +1197,14 @@ class ImportAndProjectTests(SyntheticTempTestCase):
         self.assertEqual(preview_result.warning_baseline["log_summary"]["warnings"], 1)
         result = plan.apply()
         payload = json.loads(result.record_path.read_text(encoding="utf-8"))
-        self.assertEqual(payload["schema_version"], 2)
+        self.assertEqual(payload["schema_version"], 3)
         self.assertEqual(payload["log_summary"]["warnings"], 1)
         self.assertEqual(
             payload["warning_baseline"]["algorithm"],
             "normalized-warning-signature-set-v1",
         )
         self.assertNotIn(str(baseline), json.dumps(payload))
-        Draft202012Validator(bundled_schema("acmk-runtime-test-v2.schema.json")).validate(payload)
+        Draft202012Validator(bundled_schema("acmk-runtime-test-v3.schema.json")).validate(payload)
         codes = {
             issue.code
             for issue in SDKProject.open(target, context=self.context)
@@ -785,7 +1215,7 @@ class ImportAndProjectTests(SyntheticTempTestCase):
 
         payload["warning_baseline"]["algorithm"] = "normalized-warning-line-multiset-v1"
         result.record_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-        Draft202012Validator(bundled_schema("acmk-runtime-test-v2.schema.json")).validate(payload)
+        Draft202012Validator(bundled_schema("acmk-runtime-test-v3.schema.json")).validate(payload)
         legacy_codes = {
             issue.code
             for issue in SDKProject.open(target, context=self.context)
@@ -830,7 +1260,9 @@ class ImportAndProjectTests(SyntheticTempTestCase):
             save_impact=acmk.SaveImpact.UNKNOWN,
             achievement_impact=acmk.AchievementImpact.UNKNOWN,
             clean_launch=True,
+            tested_source=target / "src",
             save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
         )
         preview = plan.preview().to_dict()
         self.assertEqual(preview["warning_baseline"]["ignored_warnings"], 5)
@@ -852,7 +1284,9 @@ class ImportAndProjectTests(SyntheticTempTestCase):
                 save_impact=acmk.SaveImpact.UNKNOWN,
                 achievement_impact=acmk.AchievementImpact.UNKNOWN,
                 clean_launch=True,
+                tested_source=target / "src",
                 save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
             )
 
         result = plan.apply()
@@ -910,7 +1344,9 @@ class ImportAndProjectTests(SyntheticTempTestCase):
                 save_impact=acmk.SaveImpact.UNKNOWN,
                 achievement_impact=acmk.AchievementImpact.UNKNOWN,
                 clean_launch=True,
+                tested_source=target / "src",
                 save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
             )
 
         duplicate_warning = self.root / "DuplicateBaseWarning.txt"
@@ -929,7 +1365,9 @@ class ImportAndProjectTests(SyntheticTempTestCase):
             save_impact=acmk.SaveImpact.UNKNOWN,
             achievement_impact=acmk.AchievementImpact.UNKNOWN,
             clean_launch=True,
+            tested_source=target / "src",
             save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
         )
         duplicate_preview = duplicate_plan.preview().to_dict()
         self.assertEqual(duplicate_preview["warning_baseline"]["ignored_warnings"], 2)
@@ -951,10 +1389,12 @@ class ImportAndProjectTests(SyntheticTempTestCase):
                 save_impact=acmk.SaveImpact.UNKNOWN,
                 achievement_impact=acmk.AchievementImpact.UNKNOWN,
                 clean_launch=True,
+                tested_source=target / "src",
                 save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
             )
 
-    def test_warning_baseline_must_predate_candidate_and_remain_unchanged(self) -> None:
+    def test_warning_baseline_may_enable_candidate_but_must_remain_unchanged(self) -> None:
         source = self.make_skeleton("BaselineIntegritySkeleton")
         target = self.root / "baseline-integrity-project"
         ProjectImporter.plan(
@@ -971,38 +1411,79 @@ class ImportAndProjectTests(SyntheticTempTestCase):
                 "Warning - recurring base warning\n"
             ).encode("utf-16-le")
         )
-        invalid_baseline = self.root / "CandidateEnabledBaseline.txt"
-        invalid_baseline.write_bytes(runtime.read_bytes())
+        same_target_baseline = self.root / "CandidateEnabledBaseline.txt"
+        same_target_baseline.write_bytes(runtime.read_bytes())
         project = SDKProject.open(target, context=self.context)
-        with self.assertRaisesRegex(ACMKError, "baseline enables the tested mod"):
-            project.plan_runtime_test(
-                runtime,
-                baseline_log_path=invalid_baseline,
-                passed=True,
-                save_impact=acmk.SaveImpact.UNKNOWN,
-                achievement_impact=acmk.AchievementImpact.UNKNOWN,
-                clean_launch=True,
-                save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
-            )
-
-        baseline = self.root / "StableBaseline.txt"
-        baseline.write_bytes(
-            ("Ancient Cities.1.9.3\nWarning - recurring base warning\n").encode("utf-16-le")
-        )
         plan = project.plan_runtime_test(
             runtime,
-            baseline_log_path=baseline,
+            baseline_log_path=same_target_baseline,
             passed=True,
             save_impact=acmk.SaveImpact.UNKNOWN,
             achievement_impact=acmk.AchievementImpact.UNKNOWN,
             clean_launch=True,
+            tested_source=target / "src",
             save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
         )
-        baseline.write_bytes(
+        preview = plan.preview().to_dict()
+        self.assertEqual(preview["warning_baseline"]["ignored_warnings"], 1)
+        self.assertEqual(preview["warning_baseline"]["unmatched_warnings"], 0)
+        same_target_baseline.write_bytes(
             ("Ancient Cities.1.9.3\nWarning - changed base warning\n").encode("utf-16-le")
         )
         with self.assertRaisesRegex(SourceChangedError, "baseline Log.txt changed"):
             plan.preview()
+
+    def test_same_ten_mod_clean_launch_baseline_supports_save_reload_evidence(self) -> None:
+        source = self.make_skeleton("CombinedTenModEvidenceSkeleton")
+        target = self.root / "combined-ten-mod-evidence-project"
+        ProjectImporter.plan(
+            source,
+            target,
+            identifier="combined-ten-mod-evidence-project",
+            context=self.context,
+        ).apply()
+        enabled_lines = [
+            f"Enabling Mod: C:/Synthetic/{index} (Synthetic companion {index})"
+            for index in range(1, 10)
+        ]
+        enabled_lines.append("Enabling Mod: C:/Synthetic/10 (Synthetic SDK Mod)")
+        baseline = self.root / "CombinedTenModCleanLaunch.txt"
+        baseline.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                + "\n".join(enabled_lines)
+                + "\nWarning - recurring combined-mod warning\n"
+            ).encode("utf-16-le")
+        )
+        candidate = self.root / "CombinedTenModAfterSaveReload.txt"
+        candidate.write_bytes(
+            (
+                "Ancient Cities.1.9.3\n"
+                + "\n".join(enabled_lines)
+                + "\nWarning - recurring combined-mod warning\n"
+                + "Manual save completed\nFull exit and restart completed\n"
+                + "Disposable save reloaded\n"
+            ).encode("utf-16-le")
+        )
+        plan = SDKProject.open(target, context=self.context).plan_runtime_test(
+            candidate,
+            tested_source=source,
+            baseline_log_path=baseline,
+            passed=True,
+            save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
+            achievement_impact=acmk.AchievementImpact.DISABLED,
+            clean_launch=True,
+            save_type=acmk.RuntimeSaveType.EXISTING_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
+        )
+        preview = plan.preview().to_dict()
+        self.assertEqual(preview["log_summary"]["mods_enabled"], 10)
+        self.assertEqual(preview["warning_baseline"]["ignored_warnings"], 1)
+        self.assertEqual(preview["warning_baseline"]["unmatched_warnings"], 0)
+        result = plan.apply()
+        payload = json.loads(result.record_path.read_text(encoding="utf-8"))
+        Draft202012Validator(bundled_schema("acmk-runtime-test-v3.schema.json")).validate(payload)
 
     def test_failed_runtime_record_matches_schema_and_reports_backups(self) -> None:
         source = self.make_skeleton("FailedEvidenceSkeleton")
@@ -1028,7 +1509,9 @@ class ImportAndProjectTests(SyntheticTempTestCase):
                 save_impact=acmk.SaveImpact.UNKNOWN,
                 achievement_impact=acmk.AchievementImpact.UNKNOWN,
                 clean_launch=False,
+                tested_source=target / "src",
                 save_type=acmk.RuntimeSaveType.NO_SAVE,
+                save_persistence=acmk.SavePersistence.NOT_APPLICABLE,
             )
             .apply()
         )
@@ -1042,7 +1525,7 @@ class ImportAndProjectTests(SyntheticTempTestCase):
         payload = json.loads(result.record_path.read_text(encoding="utf-8"))
         self.assertEqual(payload["environment"]["tested_mod"], "")
         self.assertEqual(payload["environment"]["observed_game_semver"], "")
-        Draft202012Validator(bundled_schema("acmk-runtime-test-v1.schema.json")).validate(payload)
+        Draft202012Validator(bundled_schema("acmk-runtime-test-v3.schema.json")).validate(payload)
 
     def test_runtime_log_must_remain_outside_project(self) -> None:
         source = self.make_skeleton("InternalLogSkeleton")
@@ -1063,7 +1546,9 @@ class ImportAndProjectTests(SyntheticTempTestCase):
                 save_impact=acmk.SaveImpact.UNKNOWN,
                 achievement_impact=acmk.AchievementImpact.UNKNOWN,
                 clean_launch=False,
+                tested_source=target / "src",
                 save_type=acmk.RuntimeSaveType.NO_SAVE,
+                save_persistence=acmk.SavePersistence.NOT_APPLICABLE,
             )
 
     def test_none_observed_save_impact_requires_existing_save_test(self) -> None:
@@ -1089,7 +1574,9 @@ class ImportAndProjectTests(SyntheticTempTestCase):
                 save_impact=acmk.SaveImpact.NONE_OBSERVED,
                 achievement_impact=acmk.AchievementImpact.NONE_OBSERVED,
                 clean_launch=True,
+                tested_source=target / "src",
                 save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
             )
 
     def test_release_promotes_broken_content_and_mod_type_mismatch(self) -> None:
@@ -1129,7 +1616,9 @@ class ImportAndProjectTests(SyntheticTempTestCase):
                 save_impact=acmk.SaveImpact.NONE_OBSERVED,
                 achievement_impact=acmk.AchievementImpact.NONE_OBSERVED,
                 clean_launch=True,
+                tested_source=target / "src",
                 save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+                save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
             )
 
     def test_release_rejects_source_changed_after_runtime_test(self) -> None:
@@ -1159,7 +1648,9 @@ class ImportAndProjectTests(SyntheticTempTestCase):
             save_impact=acmk.SaveImpact.NEW_SAVE_RECOMMENDED,
             achievement_impact=acmk.AchievementImpact.DISABLED,
             clean_launch=True,
+            tested_source=target / "src",
             save_type=acmk.RuntimeSaveType.NEW_DISPOSABLE,
+            save_persistence=acmk.SavePersistence.MANUAL_SAVE_RELOAD_PASSED,
         ).apply()
         (target / "src" / "Ancient" / "changed.txt").write_text("changed", encoding="utf-8")
         reopened = SDKProject.open(target, context=self.context)

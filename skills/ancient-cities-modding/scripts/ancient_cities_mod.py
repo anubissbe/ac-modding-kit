@@ -16,6 +16,7 @@ import difflib
 import hashlib
 import io
 import json
+import math
 import os
 import posixpath
 import re
@@ -309,6 +310,42 @@ def _body_property(body: str, name: str) -> str | None:
     return _body_properties(body, (name,)).get(name)
 
 
+def _direct_body_properties(body: str, names: Iterable[str]) -> dict[str, str]:
+    """Extract quoted properties while ignoring every nested child block."""
+
+    direct: list[str] = []
+    depth = 0
+    quoted = False
+    escaped = False
+    for char in body:
+        if quoted:
+            if depth == 0:
+                direct.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+            continue
+        if char == '"':
+            quoted = True
+            if depth == 0:
+                direct.append(char)
+        elif char == "{":
+            if depth == 0:
+                direct.append(" ")
+            depth += 1
+        elif char == "}":
+            if depth:
+                depth -= 1
+                if depth == 0:
+                    direct.append(" ")
+        elif depth == 0:
+            direct.append(char)
+    return _body_properties("".join(direct), names)
+
+
 def _iter_art_block_spans(text: str) -> Iterator[tuple[str, str, int, int, int, int]]:
     """Yield every (including nested) balanced ART block.
 
@@ -418,6 +455,76 @@ def parse_literal_file_refs(text: str) -> list[str]:
         if block.get("name", "").casefold() == "file" and "value" in block:
             refs.append(block["value"])
     return list(dict.fromkeys(refs))
+
+
+def _validate_standalone_building_art(path: str, text: str, issues: list[Issue]) -> None:
+    property_names = (
+        "ConstitutionCount",
+        "Requirement",
+        "RequirementPercent",
+        "Year",
+        "HistoryRangeYear",
+    )
+    for kind, body, _, _, _, _ in _iter_art_block_spans(text):
+        if kind.casefold() != "entity/construction/building":
+            continue
+        properties = _direct_body_properties(body, property_names)
+        count_vector = properties.get("ConstitutionCount")
+        if count_vector is not None:
+            parts = [part.strip() for part in count_vector.split(",")]
+            try:
+                counts = [float(part) for part in parts if part]
+            except (OverflowError, ValueError):
+                counts = []
+            if (
+                not parts
+                or any(not part for part in parts)
+                or len(counts) != len(parts)
+                or any(not math.isfinite(count) or count <= 0 for count in counts)
+            ):
+                issues.append(
+                    Issue(
+                        "error",
+                        "BUILDING_CONSTITUTION_COUNT",
+                        (
+                            "building ConstitutionCount must contain only finite numbers greater "
+                            "than zero; all-zero or non-positive recipes can disable buildings"
+                        ),
+                        path,
+                        {"value": count_vector},
+                    )
+                )
+
+        has_requirement = "Requirement" in properties
+        has_requirement_percent = "RequirementPercent" in properties
+        if has_requirement != has_requirement_percent:
+            issues.append(
+                Issue(
+                    "error",
+                    "BUILDING_REQUIREMENT_PAIR",
+                    (
+                        "building Requirement and RequirementPercent must either both be present "
+                        "or both be omitted"
+                    ),
+                    path,
+                )
+            )
+
+        unproven_fields = [name for name in ("Year", "HistoryRangeYear") if name in properties]
+        if unproven_fields:
+            issues.append(
+                Issue(
+                    "warning",
+                    "BUILDING_TIME_FIELD_UNPROVEN",
+                    (
+                        f"direct building {', '.join(unproven_fields)} fields are not proven by "
+                        "current building exemplars; use Requirement and RequirementPercent for "
+                        "availability gates"
+                    ),
+                    path,
+                    {"fields": unproven_fields},
+                )
+            )
 
 
 def decode_utf16le_art(data: bytes, label: str = "ART/LOC file") -> str:
@@ -1893,6 +2000,7 @@ def validate_target(
                 )
 
     for art_path, art_text in decoded_art.items():
+        _validate_standalone_building_art(art_path, art_text, issues)
         for reference in parse_literal_file_refs(art_text):
             logical = _normalise_reference(art_path, reference)
             if logical is None:

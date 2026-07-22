@@ -18,10 +18,24 @@ from ._version import (
     SDK_API_VERSION,
     __version__,
 )
-from .config import AchievementImpact, ProvenanceStatus, RuntimeSaveType, SaveImpact
+from .config import (
+    AchievementImpact,
+    ProvenanceStatus,
+    RuntimeSaveType,
+    SaveImpact,
+    SavePersistence,
+)
 from .errors import ACMKError
 from .reports import ValidationProfile, envelope
 from .sdk import AncientCitiesSDK, DiscoveryOptions
+from .workshop import (
+    PUBLISH_PACKET_SCHEMA_VERSION,
+    WORKSHOP_STATE_SCHEMA_VERSION,
+    CandidateKind,
+    PublishAction,
+    VisibilityControl,
+    WorkshopVisibility,
+)
 
 _SDK_COMMANDS = {"doctor", "knowledge", "project", "sdk-info"}
 _LEGACY_COMMANDS = (
@@ -125,17 +139,89 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="back up and replace an existing staged directory (requires --apply)",
     )
+    publish_packet = project_sub.add_parser(
+        "publish-packet",
+        help="verify and describe one expiring in-game publish action; never uploads",
+    )
+    publish_packet.add_argument("root")
+    publish_packet.add_argument("--candidate-root", required=True)
+    publish_packet.add_argument(
+        "--candidate-kind",
+        choices=tuple(item.value for item in CandidateKind),
+        required=True,
+    )
+    publish_packet.add_argument(
+        "--action",
+        choices=tuple(item.value for item in PublishAction),
+        required=True,
+    )
+    publish_packet.add_argument(
+        "--visibility",
+        choices=tuple(
+            item.value for item in WorkshopVisibility if item is not WorkshopVisibility.UNKNOWN
+        ),
+        required=True,
+    )
+    publish_packet.add_argument(
+        "--visibility-control",
+        choices=tuple(item.value for item in VisibilityControl),
+        required=True,
+        help="record whether the current game confirmation shows a visibility selector",
+    )
+    publish_packet.add_argument(
+        "--account-preflight-passed",
+        action="store_true",
+        required=True,
+        help="confirm Steam is using the intended publisher account (identity is not stored)",
+    )
+    publish_packet.add_argument(
+        "--target-ownership-verified",
+        action="store_true",
+        help="for Update: confirm the remote item exists and belongs to the active account",
+    )
+    publish_packet.add_argument(
+        "--generated-package-root",
+        help="fresh game-generated ACZipMod directory to match against the loose candidate",
+    )
+    publish_packet.add_argument("--valid-minutes", type=int, default=15)
+
+    sync_workshop = project_sub.add_parser(
+        "sync-workshop-id",
+        help="sync a Steam-assigned ID from a verified live mod back to the project",
+    )
+    sync_workshop.add_argument("root")
+    sync_workshop.add_argument("--from-live", required=True)
+    sync_workshop.add_argument(
+        "--visibility",
+        choices=tuple(
+            item.value for item in WorkshopVisibility if item is not WorkshopVisibility.UNKNOWN
+        ),
+        required=True,
+    )
+    sync_workshop.add_argument(
+        "--predecessor-id",
+        action="append",
+        default=[],
+        help="permanent ID of a deleted predecessor; repeat for more than one",
+    )
+    sync_workshop.add_argument("--apply", action="store_true")
+
     project_test = project_sub.add_parser(
         "record-test", help="record a completed manual in-game test and sanitized log summary"
     )
     project_test.add_argument("root")
     project_test.add_argument("--log", required=True)
     project_test.add_argument(
+        "--tested-source",
+        required=True,
+        help="loose mod root that was actually enabled for this manual test",
+    )
+    project_test.add_argument(
         "--baseline-log",
         help=(
-            "optional pre-candidate clean-launch log; normalized recurring warning signatures "
-            "are ignored regardless of repeat count, while new signatures and all runtime "
-            "errors remain blocking"
+            "optional distinct clean-launch/pre-save-reload log (the tested mod may already be "
+            "enabled); normalized recurring warning signatures are ignored regardless of repeat "
+            "count, while new signatures and all runtime errors remain blocking"
         ),
     )
     project_test.add_argument("--result", choices=("passed", "failed"), required=True)
@@ -152,6 +238,11 @@ def build_parser() -> argparse.ArgumentParser:
     project_test.add_argument(
         "--save-type",
         choices=tuple(item.value for item in RuntimeSaveType),
+        required=True,
+    )
+    project_test.add_argument(
+        "--save-persistence",
+        choices=tuple(item.value for item in SavePersistence),
         required=True,
     )
     project_test.add_argument(
@@ -210,6 +301,8 @@ def _dispatch(args: argparse.Namespace, sdk: AncientCitiesSDK) -> tuple[Mapping[
                 "project_schema_version": PROJECT_SCHEMA_VERSION,
                 "report_schema_version": REPORT_SCHEMA_VERSION,
                 "runtime_test_schema_version": RUNTIME_TEST_SCHEMA_VERSION,
+                "workshop_state_schema_version": WORKSHOP_STATE_SCHEMA_VERSION,
+                "publish_packet_schema_version": PUBLISH_PACKET_SCHEMA_VERSION,
                 "runtime": "stdlib-only",
                 "publishes_workshop_items": False,
                 "supported_interface": ["ART", "LOC", "assets", "FBX", "WAV", "overlay paths"],
@@ -288,15 +381,40 @@ def _dispatch(args: argparse.Namespace, sdk: AncientCitiesSDK) -> tuple[Mapping[
         if args.project_command == "record-test":
             test_plan = project.plan_runtime_test(
                 args.log,
+                tested_source=args.tested_source,
                 baseline_log_path=args.baseline_log,
                 passed=args.result == "passed",
                 save_impact=SaveImpact(args.save_impact),
                 achievement_impact=AchievementImpact(args.achievement_impact),
                 clean_launch=args.clean_launch,
                 save_type=RuntimeSaveType(args.save_type),
+                save_persistence=SavePersistence(args.save_persistence),
             )
             test_result = test_plan.apply() if args.apply else test_plan.preview()
             return test_result.to_dict(), True
+        if args.project_command == "publish-packet":
+            packet = sdk.prepare_publish_packet(
+                args.root,
+                args.candidate_root,
+                action=PublishAction(args.action),
+                candidate_kind=CandidateKind(args.candidate_kind),
+                visibility=WorkshopVisibility(args.visibility),
+                visibility_control=VisibilityControl(args.visibility_control),
+                account_preflight_passed=args.account_preflight_passed,
+                target_ownership_verified=(True if args.target_ownership_verified else None),
+                generated_package_root=args.generated_package_root,
+                valid_minutes=args.valid_minutes,
+            )
+            return packet.to_dict(), True
+        if args.project_command == "sync-workshop-id":
+            sync_plan = sdk.plan_workshop_sync(
+                args.root,
+                args.from_live,
+                visibility=WorkshopVisibility(args.visibility),
+                predecessor_ids=args.predecessor_id,
+            )
+            sync_result = sync_plan.apply() if args.apply else sync_plan.preview()
+            return sync_result.to_dict(), True
         if args.replace and not args.apply:
             raise ACMKError("--replace requires --apply", code="ARGUMENT_CONFLICT")
         release_plan = project.plan_release()

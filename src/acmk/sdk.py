@@ -15,9 +15,19 @@ from .building import BuildingScaffoldBuilder, BuildingSpec
 from .config import ProvenanceStatus
 from .doctor import run_doctor
 from .errors import ACMKError
-from .manifest import ManifestSpec
+from .manifest import ManifestSpec, SteamModId
 from .project import ObservedConsensusPlan, ProjectImporter, ProjectImportPlan, SDKProject
 from .reports import DiscoverySnapshot, DoctorReport, ValidationProfile, ValidationReport
+from .workshop import (
+    CandidateKind,
+    PublishAction,
+    PublishPacket,
+    VisibilityControl,
+    WorkshopSyncPlan,
+    WorkshopVisibility,
+    plan_workshop_sync,
+    prepare_publish_packet,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +111,54 @@ class AncientCitiesSDK:
         """Plan an evidence-backed reconciliation for one supported exact game build."""
 
         return self.open_project(root, refresh=refresh).plan_observed_consensus()
+
+    def prepare_publish_packet(
+        self,
+        root: str | os.PathLike[str],
+        candidate_root: str | os.PathLike[str],
+        *,
+        action: PublishAction,
+        candidate_kind: CandidateKind,
+        visibility: WorkshopVisibility,
+        visibility_control: VisibilityControl,
+        account_preflight_passed: bool,
+        target_ownership_verified: bool | None = None,
+        generated_package_root: str | os.PathLike[str] | None = None,
+        valid_minutes: int = 15,
+        refresh: bool = False,
+    ) -> PublishPacket:
+        """Describe one verified, expiring in-game publish action without uploading it."""
+
+        return prepare_publish_packet(
+            self.open_project(root, refresh=refresh),
+            candidate_root,
+            action=action,
+            candidate_kind=candidate_kind,
+            visibility=visibility,
+            visibility_control=visibility_control,
+            account_preflight_passed=account_preflight_passed,
+            target_ownership_verified=target_ownership_verified,
+            generated_package_root=generated_package_root,
+            valid_minutes=valid_minutes,
+        )
+
+    def plan_workshop_sync(
+        self,
+        root: str | os.PathLike[str],
+        live_root: str | os.PathLike[str],
+        *,
+        visibility: WorkshopVisibility,
+        predecessor_ids: Sequence[str | int | SteamModId] = (),
+        refresh: bool = False,
+    ) -> WorkshopSyncPlan:
+        """Plan reconciliation of a Steam-assigned ID after a successful upload."""
+
+        return plan_workshop_sync(
+            self.open_project(root, refresh=refresh),
+            live_root,
+            visibility=visibility,
+            predecessor_ids=predecessor_ids,
+        )
 
     def draft_builder(
         self,

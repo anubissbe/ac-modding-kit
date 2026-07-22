@@ -38,6 +38,51 @@ class BundledKnowledgeTests(unittest.TestCase):
         self.assertTrue(document.text.startswith("# Format and layout"))
         self.assertIn("UTF-16LE", document.text)
 
+    def test_workshop_publish_recovery_is_available_offline(self) -> None:
+        error_15 = knowledge.search("Error 15", topic="workflows")
+        no_connection = knowledge.search("No Connection", topic="workflows")
+        error_9 = knowledge.search("Error 9", topic="workflows")
+        file_not_found = knowledge.search("File Not Found", topic="workflows")
+        game_temp = knowledge.search("ACZipMod", topic="workflows")
+        published_item = knowledge.search("3768682609", topic="local-baseline")
+        successor_item = knowledge.search("3769474322", topic="local-baseline")
+
+        self.assertTrue(error_15)
+        self.assertTrue(no_connection)
+        self.assertTrue(error_9)
+        self.assertTrue(file_not_found)
+        self.assertTrue(game_temp)
+        self.assertTrue(published_item)
+        self.assertTrue(successor_item)
+        workflows = knowledge.read("workflows").text
+        local_baseline = knowledge.read("local-baseline").text
+        self.assertIn("Access Denied", workflows)
+        self.assertIn("Failed to initialize build on server (Access Denied)", workflows)
+        self.assertIn("Getting Workshop info for item <id> failed : File Not Found", workflows)
+        self.assertIn("SteamModId", workflows)
+        self.assertIn("%TEMP%\\ACZipMod", workflows)
+        self.assertIn("Yes/No", workflows)
+        self.assertIn("Batch consent", workflows)
+        self.assertIn("Mesolithic Branch Hut", local_baseline)
+        self.assertIn("visibility `0` (Public)", local_baseline)
+        self.assertIn("every remote primary JPEG byte-matched", local_baseline)
+
+        identity_mapping = (
+            ("3769249469", "3769474322"),
+            ("3769249957", "3769474267"),
+            ("3769250418", "3769474212"),
+            ("3769250934", "3769474151"),
+            ("3769452595", "3769473846"),
+            ("3769452717", "3769473919"),
+            ("3769452860", "3769473979"),
+            ("3769452949", "3769474016"),
+            ("3769453122", "3769474067"),
+        )
+        for predecessor, successor in identity_mapping:
+            with self.subTest(predecessor=predecessor, successor=successor):
+                self.assertIn(predecessor, local_baseline)
+                self.assertIn(successor, local_baseline)
+
     def test_search_is_case_insensitive_filtered_and_deterministic(self) -> None:
         first = knowledge.search("utf-16le", topic="format-and-layout", limit=20)
         second = knowledge.search("UTF-16LE", topic="format-and-layout", limit=20)

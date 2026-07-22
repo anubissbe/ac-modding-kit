@@ -26,6 +26,15 @@ practical.
 - Dry-run-first, backed-up project configuration updates and provenance review metadata.
 - Atomic, deterministic Workshop staging without game deployment or Steam publication.
 - Offline typed knowledge-base reading and deterministic search.
+- Offline Workshop Publish/Update recovery guidance with dated Error 15, Error 2, Steam Cloud
+  quota, preview, connection, and PublishedFileId evidence.
+- Dated Error 9 wrong-account/deleted-item recovery evidence, immutable predecessor/sibling
+  successor rules, active-account preflight, and the verified nine-item successor id mapping.
+- Typed, expiring `project publish-packet` inventories for one action and one candidate, including
+  optional member-by-member verification of the game's generated `ACZipMod` package, with no
+  upload or stored authorization capability.
+- Dry-run-first `project sync-workshop-id`, a versioned Workshop-state schema, immutable-ID and
+  deleted-predecessor guards, atomic canonical ID reconciliation, and state-directory backups.
 - `doctor`, `sdk-info`, `knowledge`, and structured `project` CLI commands.
 - Python API guide, first-safe-mod tutorial, support matrix, schemas, and examples.
 - Strict mypy checks and isolated wheel/resource/CLI smoke tests.
@@ -45,6 +54,11 @@ practical.
 - Document Blender binary handling, backup exclusions, and the initial no-LFS policy.
 - Render a default Generic manifest `Content` node without a `Value` line, matching every
   audited current Generic exemplar; explicit content values remain supported.
+- Distinguish deterministic SDK staging from the game's loose-root publisher and potentially
+  stale `%TEMP%\ACZipMod`, document the green-arrow **Yes/No** flow without a visibility editor,
+  and require a separate single-use authorization packet for each mod/action.
+- Document post-publication verification of restored `GameVersion`, the assigned nonzero
+  `SteamModId`, Steam content/preview completion, and cautious canonical-state synchronization.
 
 ### Security
 
@@ -56,6 +70,9 @@ practical.
 
 ### Fixed
 
+- Treat Ancient Cities' exact per-project ART/achievement notification as expected only when
+  `project record-test` records `achievement-impact = disabled`; all other new warnings, baseline
+  mismatches, and errors remain passing-test blockers.
 - Treat repeated occurrences of an allowed clean-launch warning signature, including changing
   engine-generated leading `Warning - [n]` ordinals, as the same baseline warning without
   weakening blocking for unrelated warnings or errors; legacy occurrence-counted evidence remains

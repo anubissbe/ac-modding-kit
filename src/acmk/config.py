@@ -64,6 +64,13 @@ class RuntimeSaveType(StrEnum):
     NO_SAVE = "no-save"
 
 
+class SavePersistence(StrEnum):
+    MANUAL_SAVE_RELOAD_PASSED = "manual-save-reload-passed"
+    FAILED = "failed"
+    NOT_TESTED = "not-tested"
+    NOT_APPLICABLE = "not-applicable"
+
+
 @dataclass(frozen=True, slots=True)
 class Compatibility:
     game_version: str
