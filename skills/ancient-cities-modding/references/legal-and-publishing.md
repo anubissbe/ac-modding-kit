@@ -26,6 +26,38 @@ For every nontrivial file, record:
 
 Reject Workshop/base-game copying as a shortcut. Use installed mods as structural evidence only.
 
+## Publish/Update authorization
+
+A rights review, release approval, successful test, or earlier upload attempt is not consent for
+the next external action. Immediately before the final in-game Publish/Update control, present
+and explicitly confirm one single-use packet containing:
+
+- the action (`Publish` or `Update`) and a current timestamp with the agreed immediate validity
+  window;
+- the exact candidate and every transmitted item with its SHA-256;
+- Steam app `667610` plus **new item**/manifest `SteamModId 0,0`, or the exact existing
+  PublishedFileId/`SteamModId` for Update; and
+- the exact visibility shown by the UI, or an explicit statement that the current client exposes
+  no visibility selector, plus the intended result to verify afterward.
+
+Expire the confirmation when its window ends or any byte, hash, item list, action, target ID,
+selected UI item, active account, or visibility state changes. A retry requires a new packet and
+confirmation. One packet authorizes one action on one mod only; never treat consent for a list or
+batch as consent for its individual publications. Do not infer consent from silence or reuse
+approval given for inspection, staging, deployment, testing, another candidate, or another
+Workshop item.
+
+Before creating or updating an item, confirm in Steam's own UI that the active account is the
+intended publisher. For Update, also confirm that the PublishedFileId exists and belongs to that
+account. Store only a sanitized pass/fail statement in public documentation, not account names,
+Steam IDs, login state, credentials, tokens, or Steam Guard data.
+
+A wrong-owned or deleted Workshop identity remains historical evidence. Preserve its project and
+nonzero id unchanged. A replacement must be a separate successor project and loose folder that
+starts at `SteamModId 0,0`, passes fresh rights/runtime/release checks, and receives its own
+single-use publication confirmation. Never transfer an id between projects or claim ownership
+merely because the local manifest contains it.
+
 ## Current web anchors
 
 - Ancient Cities site, EULA/Modding sections: https://www.ancient-cities.com/

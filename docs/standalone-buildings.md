@@ -119,9 +119,30 @@ print(plan.preview().to_dict())  # no files are written
 Construction and decay entries are complete visual snapshots, not inferred deltas. A
 construction resource of `None` renders the empty resource entry used by current labor or
 excavation exemplars. Resource counts, ordering, models, capacity, bounds, door placement,
-and knowledge requirements still need an isolated in-game test. ACMK accepts construction
-counts from 1 through 1,000,000 as a defensive serialization limit; that range is not an
-engine guarantee.
+and knowledge requirements still need an isolated in-game test. ACMK accepts positive finite
+construction counts no greater than 1,000,000 as a defensive serialization limit; that range
+is not an engine guarantee.
+
+## Runtime availability and diagnostic boundary
+
+The audited building flow exposes availability through Culture progression plus Knowledge
+references and their XP thresholds. No direct building gate through `Year` or
+`HistoryRangeYear` has been proven. Model historical progression with current Culture and
+Knowledge exemplars unless a new same-category exemplar and runtime test establish another
+mechanism.
+
+Keep canonical `src` counts positive and content-correct. A zero `ConstitutionCount` disabled
+the tested catalogue entry. A same-length positive ones-vector may be used only as a minimal
+smoke probe; it is not balanced release data. Although the typed renderer can omit an empty
+`requirements`/`requirement_percent` pair, that output is diagnostic only: never omit either
+field from canonical `src` or release content, and never omit one without the other.
+
+Perform either probe only in a backed-up live non-numeric loose copy while the game is fully
+exited. Run one change at a time, from a clean launch with only the candidate enabled. Use a
+disposable/new game, make an explicit manual save, fully exit, restart, reload, and review the
+log. Then restore the live file byte-for-byte from canonical `src`, verify its SHA-256, and
+repeat that complete clean-launch/manual-save/full-exit/restart/reload sequence before claiming
+compatibility or staging a release.
 
 `spec.index_path` identifies the generated `Ancient/.../Index.art` definition. Scaffold
 results keep load-order relations distinct from engine-node references: use
@@ -135,6 +156,7 @@ results keep load-order relations distinct from engine-node references: use
 | Entity identity | Safe ASCII identifier and no case-insensitive base-building collision | Loader behavior must still be tested after game updates |
 | ART | Deterministic CRLF with a terminal CRLF, exactly one UTF-16LE BOM, required entity/location-mask blocks, and the exact literal file set | ACMK does not claim a complete ART grammar |
 | Building LOC | Runtime-proven v1.9.3 layout: LF-only, no terminal newline, exactly one UTF-16LE BOM, and the required localization markers | Re-test this byte contract after a game update |
+| Availability | Requirement vectors align exactly; construction counts are positive finite values | Culture plus Knowledge/XP is observed; direct `Year`/`HistoryRangeYear` building gates are unproven, and temporary omission/ones-vector probes are never release data |
 | Engine references | Typed external-reference syntax plus an exact-case current base-file anchor when available | Nodes inside that file remain engine-defined and runtime-verified |
 | Models | Every role has an exact-case, case-insensitively unambiguous FBX path and a binary or ASCII FBX signature | Blender import, axes, materials, animation, and rendering need specialist and runtime tests |
 | Icon | Valid 128x128, 32-bit true-color TGA; raw or RLE with dimensions bounded before packet validation | Visual quality is a human review |

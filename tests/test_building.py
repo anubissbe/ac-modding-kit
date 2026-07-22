@@ -221,6 +221,43 @@ class BuildingScaffoldTests(unittest.TestCase):
             ["#./Localization/Description", "#./Localization/Noun"],
         )
 
+    def test_requirement_fields_can_only_be_omitted_together(self) -> None:
+        ungated = replace(
+            building_spec(),
+            requirements=(),
+            requirement_percent=(),
+        )
+        art = ungated.render_index_art().text
+        self.assertNotIn('RequirementPercent:"', art)
+        self.assertNotIn('Requirement:"', art)
+
+        with self.assertRaisesRegex(acmk.ContractError, "align exactly"):
+            replace(
+                ungated,
+                requirements=(EngineReference("~/Entity/Knowledge/List/Fishing/Entity"),),
+            )
+        with self.assertRaisesRegex(acmk.ContractError, "align exactly"):
+            replace(ungated, requirement_percent=(0.25,))
+
+    def test_constitution_counts_accept_positive_numbers_and_render_canonically(self) -> None:
+        spec = building_spec()
+        fractional = replace(
+            spec,
+            construction_stages=(
+                replace(spec.construction_stages[0], count=1),
+                replace(spec.construction_stages[1], count=0.25),
+            ),
+        )
+        self.assertIn('ConstitutionCount:"1,0.25"', fractional.render_index_art().text)
+
+        for invalid in (0, -1, float("inf"), float("nan"), True, "1", 10**10_000):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(acmk.ContractError, "positive finite number"):
+                    replace(  # type: ignore[arg-type]
+                        spec.construction_stages[0],
+                        count=invalid,
+                    )
+
     def test_validation_rejects_non_runtime_localization_newlines(self) -> None:
         bad_localization = acmk.Utf16TextDocument.from_text(
             "#./Localization/Description\r\n"
@@ -406,7 +443,7 @@ class BuildingScaffoldTests(unittest.TestCase):
                 preview_model=BuildingAssetPath("struct_default.fbx"),
             )
 
-        with self.assertRaisesRegex(acmk.ContractError, "between 1 and 1000000"):
+        with self.assertRaisesRegex(acmk.ContractError, "positive finite number"):
             ConstructionStage(
                 "00-TooLarge",
                 None,

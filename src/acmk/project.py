@@ -28,19 +28,25 @@ from .config import (
     RuntimeSaveType,
     RuntimeStatus,
     SaveImpact,
+    SavePersistence,
     SkeletonSource,
 )
 from .errors import ContractError, ProjectError, SourceChangedError, ValidationFailedError
 from .manifest import ManifestDocument
 from .reports import ExecutionMode, Issue, Severity, ValidationProfile, ValidationReport
 
-_LEGACY_RUNTIME_TEST_SCHEMA_VERSION = 1
+_RUNTIME_TEST_SCHEMA_V1 = 1
+_RUNTIME_TEST_SCHEMA_V2 = 2
+_LEGACY_RUNTIME_TEST_SCHEMA_VERSIONS = frozenset({_RUNTIME_TEST_SCHEMA_V1, _RUNTIME_TEST_SCHEMA_V2})
+_LEGACY_SOURCE_FINGERPRINT_ALGORITHM = "sha256-tree-v1"
+_LOOSE_MOD_FINGERPRINT_ALGORITHM = "sha256-loose-mod-v1"
 _LEGACY_WARNING_BASELINE_ALGORITHM = "normalized-warning-line-multiset-v1"
 _WARNING_BASELINE_ALGORITHM = "normalized-warning-signature-set-v1"
 _SUPPORTED_WARNING_BASELINE_ALGORITHMS = frozenset(
     {_LEGACY_WARNING_BASELINE_ALGORITHM, _WARNING_BASELINE_ALGORITHM}
 )
 _OBSERVED_CONSENSUS_IMPORT_SCHEMA_VERSION = 2
+_STAGED_ROOT_ARTIFACT_NAMES = ("Index.art", "Thumbnail.jpg", "Mod.zip")
 _OBSERVED_CONSENSUS_PROFILES = {
     (
         "22",
@@ -182,16 +188,22 @@ class SourceFingerprint:
     sha256: str
     files: int
     bytes: int
+    algorithm: str = _LOOSE_MOD_FINGERPRINT_ALGORITHM
 
     def __post_init__(self) -> None:
         if not _valid_sha256(self.sha256):
             raise ContractError("source fingerprint must be a lowercase SHA-256 digest")
         if not _nonnegative_int(self.files) or not _nonnegative_int(self.bytes):
             raise ContractError("source fingerprint counts must be non-negative integers")
+        if self.algorithm not in {
+            _LEGACY_SOURCE_FINGERPRINT_ALGORITHM,
+            _LOOSE_MOD_FINGERPRINT_ALGORITHM,
+        }:
+            raise ContractError("source fingerprint algorithm is unsupported")
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "algorithm": "sha256-tree-v1",
+            "algorithm": self.algorithm,
             "sha256": self.sha256,
             "files": self.files,
             "bytes": self.bytes,
@@ -542,6 +554,28 @@ class ProjectImporter:
 
 
 @dataclass(frozen=True, slots=True)
+class StagedArtifact:
+    name: str
+    size: int
+    sha256: str
+
+    def __post_init__(self) -> None:
+        if self.name not in _STAGED_ROOT_ARTIFACT_NAMES:
+            raise ContractError("staged artifact name is unsupported")
+        if not _nonnegative_int(self.size):
+            raise ContractError("staged artifact size must be a non-negative integer")
+        if not _valid_sha256(self.sha256):
+            raise ContractError("staged artifact SHA-256 must be a lowercase digest")
+
+    def to_dict(self, output_directory: Path) -> dict[str, Any]:
+        return {
+            "path": str(output_directory / self.name),
+            "bytes": self.size,
+            "sha256": self.sha256,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ReleaseResult:
     mode: ExecutionMode
     output_directory: Path
@@ -550,11 +584,32 @@ class ReleaseResult:
     members: tuple[str, ...]
     backup: Path | None
     validation: ValidationReport
+    artifacts: tuple[StagedArtifact, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.artifacts and tuple(item.name for item in self.artifacts) != (
+            _STAGED_ROOT_ARTIFACT_NAMES
+        ):
+            raise ContractError(
+                "staged artifacts must report Index.art, Thumbnail.jpg, and Mod.zip in order"
+            )
 
     def to_dict(self) -> dict[str, Any]:
+        artifact_payload = {
+            artifact.name: artifact.to_dict(self.output_directory) for artifact in self.artifacts
+        }
+        if not artifact_payload:
+            # Retain useful serialization for callers that construct the former
+            # ReleaseResult shape directly; SDK-produced results always report all three.
+            artifact_payload["Mod.zip"] = {
+                "path": str(self.output_directory / "Mod.zip"),
+                "bytes": self.archive_size,
+                "sha256": self.archive_sha256,
+            }
         return {
             "mode": self.mode.value,
             "output_directory": str(self.output_directory),
+            "artifacts": artifact_payload,
             "archive": {
                 "path": str(self.output_directory / "Mod.zip"),
                 "bytes": self.archive_size,
@@ -574,10 +629,12 @@ class RuntimeTestResult:
     log_sha256: str
     log_summary: Mapping[str, Any]
     source_fingerprint: SourceFingerprint
+    tested_source: Path
     operating_system: str
     toolkit_version: str
     clean_launch: bool
     save_type: RuntimeSaveType
+    save_persistence: SavePersistence
     tested_mod: str
     observed_game_semver: str
     record_path: Path
@@ -606,11 +663,13 @@ class RuntimeTestResult:
             "log_sha256": self.log_sha256,
             "log_summary": dict(self.log_summary),
             "source_fingerprint": self.source_fingerprint.to_dict(),
+            "tested_source": str(self.tested_source),
             "environment": {
                 "operating_system": self.operating_system,
                 "toolkit_version": self.toolkit_version,
                 "clean_launch": self.clean_launch,
                 "save_type": self.save_type.value,
+                "save_persistence": self.save_persistence.value,
                 "tested_mod": self.tested_mod,
                 "observed_game_semver": self.observed_game_semver,
             },
@@ -913,10 +972,12 @@ class RuntimeTestPlan:
     log_sha256: str
     log_summary: Mapping[str, Any]
     source_fingerprint: SourceFingerprint
+    tested_source: Path
     operating_system: str
     toolkit_version: str
     clean_launch: bool
     save_type: RuntimeSaveType
+    save_persistence: SavePersistence
     tested_mod: str
     observed_game_semver: str
     recorded_at: str
@@ -932,21 +993,23 @@ class RuntimeTestPlan:
     def preview(self) -> RuntimeTestResult:
         self._validated_record()
         return RuntimeTestResult(
-            ExecutionMode.DRY_RUN,
-            self.project.layout.root,
-            self.updated_config.runtime_status,
-            self.log_sha256,
-            self.log_summary,
-            self.source_fingerprint,
-            self.operating_system,
-            self.toolkit_version,
-            self.clean_launch,
-            self.save_type,
-            self.tested_mod,
-            self.observed_game_semver,
-            self.record_path,
-            None,
-            None,
+            mode=ExecutionMode.DRY_RUN,
+            project_root=self.project.layout.root,
+            status=self.updated_config.runtime_status,
+            log_sha256=self.log_sha256,
+            log_summary=self.log_summary,
+            source_fingerprint=self.source_fingerprint,
+            tested_source=self.tested_source,
+            operating_system=self.operating_system,
+            toolkit_version=self.toolkit_version,
+            clean_launch=self.clean_launch,
+            save_type=self.save_type,
+            save_persistence=self.save_persistence,
+            tested_mod=self.tested_mod,
+            observed_game_semver=self.observed_game_semver,
+            record_path=self.record_path,
+            config_backup=None,
+            record_backup=None,
             warning_baseline=(
                 self.warning_baseline.to_dict() if self.warning_baseline is not None else None
             ),
@@ -1015,21 +1078,23 @@ class RuntimeTestPlan:
                 ) from exc
             raise
         return RuntimeTestResult(
-            ExecutionMode.APPLY,
-            layout.root,
-            self.updated_config.runtime_status,
-            self.log_sha256,
-            self.log_summary,
-            self.source_fingerprint,
-            self.operating_system,
-            self.toolkit_version,
-            self.clean_launch,
-            self.save_type,
-            self.tested_mod,
-            self.observed_game_semver,
-            self.record_path,
-            config_backup,
-            record_backup,
+            mode=ExecutionMode.APPLY,
+            project_root=layout.root,
+            status=self.updated_config.runtime_status,
+            log_sha256=self.log_sha256,
+            log_summary=self.log_summary,
+            source_fingerprint=self.source_fingerprint,
+            tested_source=self.tested_source,
+            operating_system=self.operating_system,
+            toolkit_version=self.toolkit_version,
+            clean_launch=self.clean_launch,
+            save_type=self.save_type,
+            save_persistence=self.save_persistence,
+            tested_mod=self.tested_mod,
+            observed_game_semver=self.observed_game_semver,
+            record_path=self.record_path,
+            config_backup=config_backup,
+            record_backup=record_backup,
             warning_baseline=(
                 self.warning_baseline.to_dict() if self.warning_baseline is not None else None
             ),
@@ -1049,10 +1114,21 @@ class RuntimeTestPlan:
         )
         if expected_config != self.updated_config:
             raise ContractError("runtime-test plan contains unauthorized configuration changes")
-        if not isinstance(self.clean_launch, bool) or not isinstance(
-            self.save_type, RuntimeSaveType
+        if (
+            not isinstance(self.clean_launch, bool)
+            or not isinstance(self.save_type, RuntimeSaveType)
+            or not isinstance(self.save_persistence, SavePersistence)
+            or not isinstance(self.tested_source, Path)
         ):
             raise ContractError("runtime-test environment fields have invalid types")
+        if self.updated_config.runtime_status is RuntimeStatus.FAILED:
+            persistence_problem = _save_persistence_evidence_problem(
+                self.save_type,
+                self.save_persistence,
+                passed=False,
+            )
+            if persistence_problem:
+                raise ContractError(persistence_problem)
         expected_os = f"{platform.system()} {platform.release()}".strip()
         if self.operating_system != expected_os or self.toolkit_version != __version__:
             raise ContractError("runtime-test environment changed after planning")
@@ -1074,6 +1150,7 @@ class RuntimeTestPlan:
             log_text,
             project_name=self.project.config.name,
             game_semver=self.project.config.compatibility.game_semver,
+            achievement_impact=self.updated_config.achievement_impact,
         )
         if summary != dict(self.log_summary):
             raise ContractError("runtime-test summary does not match the recorded log")
@@ -1098,7 +1175,7 @@ class RuntimeTestPlan:
                 raise SourceChangedError(
                     "baseline Log.txt changed after the runtime record was planned"
                 )
-            baseline_summary, baseline_target_enabled, baseline_game_version_observed = (
+            baseline_summary, _baseline_target_enabled, baseline_game_version_observed = (
                 _analyse_runtime_log(
                     baseline_text,
                     project_name=self.project.config.name,
@@ -1107,11 +1184,17 @@ class RuntimeTestPlan:
             )
             if baseline_summary != dict(baseline.log_summary):
                 raise ContractError("warning baseline summary does not match the recorded log")
-            if baseline_target_enabled:
-                raise ContractError("warning baseline unexpectedly enables the tested mod")
             if not baseline_game_version_observed:
                 raise ContractError("warning baseline does not identify the recorded game version")
-            ignored_warnings, unmatched_warnings = _warning_differential(log_text, baseline_text)
+            ignored_warnings, unmatched_warnings = _warning_differential(
+                log_text,
+                baseline_text,
+                project_name=self.project.config.name,
+                allow_achievement_warning=(
+                    self.updated_config.achievement_impact is AchievementImpact.DISABLED
+                    and target_enabled
+                ),
+            )
             if (
                 ignored_warnings != baseline.ignored_warnings
                 or unmatched_warnings != baseline.unmatched_warnings
@@ -1138,16 +1221,23 @@ class RuntimeTestPlan:
             )
             if impact_problem:
                 blockers.append(impact_problem)
+            persistence_problem = _save_persistence_evidence_problem(
+                self.save_type,
+                self.save_persistence,
+                passed=True,
+            )
+            if persistence_problem:
+                blockers.append(persistence_problem)
             if blockers:
                 raise ValidationFailedError(
                     "cannot record a passing test: log contains " + ", ".join(blockers),
                     path=self.log_path,
                 )
-        current_fingerprint = _capture_source_tree(self.project.layout.source_root)[1]
+        current_fingerprint = _capture_loose_mod_root(self.tested_source)[1]
         if current_fingerprint != self.source_fingerprint:
             raise SourceChangedError(
-                "project runtime source changed after the test record was planned",
-                path=self.project.layout.source_root,
+                "tested loose mod source changed after the test record was planned",
+                path=self.tested_source,
             )
         try:
             recorded_time = datetime.fromisoformat(self.recorded_at.replace("Z", "+00:00"))
@@ -1156,11 +1246,7 @@ class RuntimeTestPlan:
         if recorded_time.tzinfo is None or recorded_time.utcoffset() is None:
             raise ContractError("runtime-test recorded_at must include a timezone")
         record = {
-            "schema_version": (
-                RUNTIME_TEST_SCHEMA_VERSION
-                if self.warning_baseline is not None
-                else _LEGACY_RUNTIME_TEST_SCHEMA_VERSION
-            ),
+            "schema_version": RUNTIME_TEST_SCHEMA_VERSION,
             "recorded_at": self.recorded_at,
             "runtime_status": self.updated_config.runtime_status.value,
             "compatibility": {
@@ -1177,6 +1263,7 @@ class RuntimeTestPlan:
                 "toolkit_version": self.toolkit_version,
                 "clean_launch": self.clean_launch,
                 "save_type": self.save_type.value,
+                "save_persistence": self.save_persistence.value,
                 "tested_mod": self.tested_mod,
                 "observed_game_semver": self.observed_game_semver,
             },
@@ -1297,6 +1384,23 @@ class ReleasePlan:
                 members=tuple(str(item) for item in build["members"]),
                 backup=None,
                 validation=final_validation,
+                artifacts=(
+                    StagedArtifact(
+                        "Index.art",
+                        by_relative["Index.art"].size,
+                        by_relative["Index.art"].sha256,
+                    ),
+                    StagedArtifact(
+                        "Thumbnail.jpg",
+                        by_relative["Thumbnail.jpg"].size,
+                        by_relative["Thumbnail.jpg"].sha256,
+                    ),
+                    StagedArtifact(
+                        "Mod.zip",
+                        int(build["bytes"]),
+                        str(build["sha256"]),
+                    ),
+                ),
             )
             if not apply:
                 return result
@@ -1328,6 +1432,7 @@ class ReleasePlan:
                 members=result.members,
                 backup=backup,
                 validation=result.validation,
+                artifacts=result.artifacts,
             )
         finally:
             _remove_temporary_tree(workspace)
@@ -1411,18 +1516,21 @@ class SDKProject:
         self,
         log_path: str | os.PathLike[str],
         *,
+        tested_source: str | os.PathLike[str],
         passed: bool,
         save_impact: SaveImpact,
         achievement_impact: AchievementImpact,
         clean_launch: bool,
         save_type: RuntimeSaveType,
+        save_persistence: SavePersistence,
         baseline_log_path: str | os.PathLike[str] | None = None,
     ) -> RuntimeTestPlan:
         """Record a user-performed test without launching the game.
 
         A passing record requires the current compatibility fingerprint and a
         log without lines classified as errors or failures. An optional clean
-        pre-candidate baseline may suppress only recurring normalized warning signatures.
+        clean-launch/pre-save-reload baseline may suppress only recurring normalized warning
+        signatures, including when that baseline already enables the tested mod.
         Raw logs and their absolute paths are never copied into the project.
         """
 
@@ -1435,8 +1543,18 @@ class SDKProject:
             raise ContractError("achievement_impact must be an AchievementImpact value")
         if not isinstance(save_type, RuntimeSaveType):
             raise ContractError("save_type must be a RuntimeSaveType value")
+        if not isinstance(save_persistence, SavePersistence):
+            raise ContractError("save_persistence must be a SavePersistence value")
+        persistence_problem = _save_persistence_evidence_problem(
+            save_type,
+            save_persistence,
+            passed=passed,
+        )
+        if persistence_problem and not passed:
+            raise ContractError(persistence_problem)
         live_context = self._refresh_context()
         _assert_context_matches(live_context, self.config.compatibility)
+        tested_source_root = _lexical_absolute(Path(tested_source))
         source = _lexical_absolute(Path(log_path))
         if _is_within(source, self.layout.root):
             raise ProjectError(
@@ -1456,6 +1574,7 @@ class SDKProject:
                 log_text,
                 project_name=self.config.name,
                 game_semver=self.config.compatibility.game_semver,
+                achievement_impact=achievement_impact,
             )
         except (_legacy.ModToolError, OSError) as exc:
             raise ProjectError(str(exc), code="LOG_INVALID", path=source) from exc
@@ -1465,7 +1584,7 @@ class SDKProject:
             baseline_source = _lexical_absolute(Path(baseline_log_path))
             if baseline_source == source:
                 raise ProjectError(
-                    "warning baseline must be a distinct pre-candidate log",
+                    "warning baseline must be a distinct clean-launch/pre-save-reload log",
                     code="BASELINE_LOG_SAME_AS_RUNTIME",
                     path=baseline_source,
                 )
@@ -1485,7 +1604,7 @@ class SDKProject:
                 baseline_text = _legacy.decode_log_bytes(baseline_bytes, str(baseline_source))
                 (
                     baseline_summary,
-                    baseline_target_enabled,
+                    _baseline_target_enabled,
                     baseline_game_version_observed,
                 ) = _analyse_runtime_log(
                     baseline_text,
@@ -1496,17 +1615,19 @@ class SDKProject:
                 raise ProjectError(
                     str(exc), code="BASELINE_LOG_INVALID", path=baseline_source
                 ) from exc
-            if baseline_target_enabled:
-                raise ValidationFailedError(
-                    "warning baseline enables the tested mod; use a pre-candidate log",
-                    path=baseline_source,
-                )
             if not baseline_game_version_observed:
                 raise ValidationFailedError(
                     "warning baseline does not contain the exact game-version marker",
                     path=baseline_source,
                 )
-            ignored_warnings, unmatched_warnings = _warning_differential(log_text, baseline_text)
+            ignored_warnings, unmatched_warnings = _warning_differential(
+                log_text,
+                baseline_text,
+                project_name=self.config.name,
+                allow_achievement_warning=(
+                    achievement_impact is AchievementImpact.DISABLED and target_enabled
+                ),
+            )
             warning_baseline = _WarningBaseline(
                 log_path=baseline_source,
                 log_size=len(baseline_bytes),
@@ -1528,12 +1649,14 @@ class SDKProject:
             impact_problem = _save_impact_evidence_problem(save_impact, save_type)
             if impact_problem:
                 blockers.append(impact_problem)
+            if persistence_problem:
+                blockers.append(persistence_problem)
             if blockers:
                 raise ValidationFailedError(
                     "cannot record a passing test: log contains " + ", ".join(blockers),
                     path=source,
                 )
-        source_fingerprint = _capture_source_tree(self.layout.source_root)[1]
+        source_fingerprint = _capture_loose_mod_root(tested_source_root)[1]
         updated = ProjectConfig(
             identifier=self.config.identifier,
             name=self.config.name,
@@ -1564,10 +1687,12 @@ class SDKProject:
             log_summary=summary,
             warning_baseline=warning_baseline,
             source_fingerprint=source_fingerprint,
+            tested_source=tested_source_root,
             operating_system=(f"{platform.system()} {platform.release()}".strip()),
             toolkit_version=__version__,
             clean_launch=clean_launch,
             save_type=save_type,
+            save_persistence=save_persistence,
             tested_mod=self.config.name if target_enabled else "",
             observed_game_semver=(
                 self.config.compatibility.game_semver if game_version_observed else ""
@@ -2022,10 +2147,12 @@ class SDKProject:
             if not isinstance(payload, dict):
                 raise ValueError("record root must be an object")
             schema_version = payload.get("schema_version")
-            if schema_version not in {
-                _LEGACY_RUNTIME_TEST_SCHEMA_VERSION,
-                RUNTIME_TEST_SCHEMA_VERSION,
-            }:
+            if (
+                isinstance(schema_version, bool)
+                or not isinstance(schema_version, int)
+                or schema_version
+                not in {*_LEGACY_RUNTIME_TEST_SCHEMA_VERSIONS, RUNTIME_TEST_SCHEMA_VERSION}
+            ):
                 raise ValueError("unsupported runtime-test schema")
             expected_root_keys = {
                 "schema_version",
@@ -2037,7 +2164,10 @@ class SDKProject:
                 "source_fingerprint",
                 "environment",
             }
-            if schema_version == RUNTIME_TEST_SCHEMA_VERSION:
+            has_warning_baseline = "warning_baseline" in payload
+            if schema_version == _RUNTIME_TEST_SCHEMA_V2 or (
+                schema_version == RUNTIME_TEST_SCHEMA_VERSION and has_warning_baseline
+            ):
                 expected_root_keys.add("warning_baseline")
             if set(payload) != expected_root_keys:
                 raise ValueError("record fields do not match the runtime-test schema")
@@ -2066,9 +2196,11 @@ class SDKProject:
                 or log_summary["mods_enabled"] == 0
             ):
                 raise ValueError("passing runtime evidence must contain a clean enabled-mod log")
-            if schema_version == _LEGACY_RUNTIME_TEST_SCHEMA_VERSION:
+            if not has_warning_baseline:
                 if log_summary["warnings"] != 0:
-                    raise ValueError("passing v1 runtime evidence must contain a warning-free log")
+                    raise ValueError(
+                        "passing runtime evidence without a baseline must be warning-free"
+                    )
             else:
                 warning_baseline = payload.get("warning_baseline")
                 baseline_keys = {
@@ -2117,14 +2249,17 @@ class SDKProject:
             if payload.get("compatibility") != expected_compatibility:
                 raise ValueError("record compatibility differs from acmk.toml")
             environment = payload.get("environment")
-            if not isinstance(environment, dict) or set(environment) != {
+            environment_keys = {
                 "operating_system",
                 "toolkit_version",
                 "clean_launch",
                 "save_type",
                 "tested_mod",
                 "observed_game_semver",
-            }:
+            }
+            if schema_version == RUNTIME_TEST_SCHEMA_VERSION:
+                environment_keys.add("save_persistence")
+            if not isinstance(environment, dict) or set(environment) != environment_keys:
                 raise ValueError("environment does not match the runtime-test schema")
             if (
                 not isinstance(environment.get("operating_system"), str)
@@ -2147,6 +2282,21 @@ class SDKProject:
             )
             if impact_problem:
                 raise ValueError(impact_problem)
+            if schema_version == RUNTIME_TEST_SCHEMA_VERSION:
+                raw_save_persistence = environment.get("save_persistence")
+                if not isinstance(raw_save_persistence, str):
+                    raise ValueError("runtime evidence has invalid save persistence")
+                try:
+                    recorded_save_persistence = SavePersistence(raw_save_persistence)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("runtime evidence has invalid save persistence") from exc
+                persistence_problem = _save_persistence_evidence_problem(
+                    recorded_save_type,
+                    recorded_save_persistence,
+                    passed=True,
+                )
+                if persistence_problem:
+                    raise ValueError(persistence_problem)
             if environment.get("tested_mod") != self.config.name:
                 raise ValueError("runtime log evidence does not identify this project title")
             if environment.get("observed_game_semver") != self.config.compatibility.game_semver:
@@ -2156,7 +2306,12 @@ class SDKProject:
                 raise ValueError("source_fingerprint must be an object")
             if set(raw_fingerprint) != {"algorithm", "sha256", "files", "bytes"}:
                 raise ValueError("source_fingerprint fields do not match the schema")
-            if raw_fingerprint.get("algorithm") != "sha256-tree-v1":
+            expected_fingerprint_algorithm = (
+                _LOOSE_MOD_FINGERPRINT_ALGORITHM
+                if schema_version == RUNTIME_TEST_SCHEMA_VERSION
+                else _LEGACY_SOURCE_FINGERPRINT_ALGORITHM
+            )
+            if raw_fingerprint.get("algorithm") != expected_fingerprint_algorithm:
                 raise ValueError("unsupported source fingerprint algorithm")
             sha256 = raw_fingerprint.get("sha256")
             file_count = raw_fingerprint.get("files")
@@ -2165,8 +2320,20 @@ class SDKProject:
                 raise ValueError("source fingerprint must contain a SHA-256 digest")
             if not _nonnegative_int(file_count) or not _nonnegative_int(byte_count):
                 raise ValueError("source fingerprint counts must be non-negative integers")
-            recorded = SourceFingerprint(sha256, file_count, byte_count)
-        except (ProjectError, OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+            recorded = SourceFingerprint(
+                sha256,
+                file_count,
+                byte_count,
+                expected_fingerprint_algorithm,
+            )
+        except (
+            ContractError,
+            ProjectError,
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            ValueError,
+        ) as exc:
             yield Issue(
                 Severity.ERROR,
                 "RELEASE_RUNTIME_EVIDENCE_INVALID",
@@ -2175,7 +2342,11 @@ class SDKProject:
             )
             return
         try:
-            current = _capture_source_tree(self.layout.source_root)[1]
+            current = (
+                _capture_loose_mod_root(self.layout.source_root)[1]
+                if schema_version == RUNTIME_TEST_SCHEMA_VERSION
+                else _capture_source_tree(self.layout.source_root)[1]
+            )
         except ProjectError as exc:
             yield Issue(
                 Severity.ERROR,
@@ -2188,9 +2359,21 @@ class SDKProject:
             yield Issue(
                 Severity.ERROR,
                 "RELEASE_SOURCE_CHANGED_AFTER_TEST",
-                "runtime source differs from the source fingerprint recorded after testing",
+                "canonical src differs from the tested loose-mod source fingerprint",
                 self.layout.source_root,
                 {"recorded": recorded.to_dict(), "current": current.to_dict()},
+            )
+        if schema_version in _LEGACY_RUNTIME_TEST_SCHEMA_VERSIONS:
+            yield Issue(
+                Severity.ERROR,
+                "RELEASE_RUNTIME_EVIDENCE_MIGRATION_REQUIRED",
+                f"runtime-test schema v{schema_version} predates explicit tested-source and "
+                "save-persistence evidence; explicitly record a new v3 test",
+                path,
+                {
+                    "recorded_schema_version": schema_version,
+                    "required_schema_version": RUNTIME_TEST_SCHEMA_VERSION,
+                },
             )
 
 
@@ -2255,6 +2438,137 @@ def _capture_source_tree(
         digest.update(encoded_path)
         digest.update(snapshot.size.to_bytes(8, "big"))
         digest.update(bytes.fromhex(snapshot.sha256))
+    fingerprint = SourceFingerprint(
+        digest.hexdigest(),
+        len(snapshots),
+        total,
+        _LEGACY_SOURCE_FINGERPRINT_ALGORITHM,
+    )
+    return tuple(snapshots), fingerprint
+
+
+def _capture_loose_mod_root(
+    root: Path,
+) -> tuple[tuple[FileSnapshot, ...], SourceFingerprint]:
+    """Fingerprint exactly the loadable loose-mod surface, excluding empty ``Mod.hms``."""
+
+    try:
+        if _is_link_like(root) or not root.is_dir():
+            raise ProjectError("tested source must be a regular loose-mod directory", path=root)
+        top_level = list(root.iterdir())
+    except OSError as exc:
+        raise ProjectError(f"cannot inspect tested loose-mod source: {exc}", path=root) from exc
+    top_names: dict[str, str] = {}
+    for child in top_level:
+        folded_name = child.name.casefold()
+        if folded_name in top_names:
+            raise ProjectError(
+                f"case-insensitive source collision: {top_names[folded_name]} and {child.name}",
+                code="PATH_COLLISION",
+                path=child,
+            )
+        top_names[folded_name] = child.name
+    required = {"Index.art", "Thumbnail.jpg", "Ancient"}
+    missing = sorted(name for name in required if top_names.get(name.casefold()) != name)
+    if missing:
+        raise ProjectError(
+            "tested loose-mod source is missing exact " + ", ".join(missing),
+            code="TESTED_SOURCE_LAYOUT",
+            path=root,
+        )
+    permitted = required | {"Mod.hms"}
+    unexpected = sorted(child.name for child in top_level if child.name not in permitted)
+    if unexpected:
+        raise ProjectError(
+            "tested loose-mod source contains unexpected root entries: " + ", ".join(unexpected),
+            code="TESTED_SOURCE_LAYOUT",
+            path=root,
+        )
+    ancient_root = root / "Ancient"
+    try:
+        for name in ("Index.art", "Thumbnail.jpg"):
+            required_file = root / name
+            if _is_link_like(required_file) or not required_file.is_file():
+                raise ProjectError(
+                    f"tested loose-mod {name} must be a regular file",
+                    code="TESTED_SOURCE_LAYOUT",
+                    path=required_file,
+                )
+        if _is_link_like(ancient_root) or not ancient_root.is_dir():
+            raise ProjectError(
+                "tested loose-mod Ancient entry must be a regular directory",
+                code="TESTED_SOURCE_LAYOUT",
+                path=ancient_root,
+            )
+        managed_state = root / "Mod.hms"
+        if managed_state.exists():
+            if _is_link_like(managed_state) or not managed_state.is_file():
+                raise ProjectError(
+                    "game-managed Mod.hms must be a regular file",
+                    code="TESTED_SOURCE_LAYOUT",
+                    path=managed_state,
+                )
+            if managed_state.stat().st_size != 0:
+                raise ProjectError(
+                    "only an empty game-managed Mod.hms may be excluded from the fingerprint",
+                    code="TESTED_SOURCE_LAYOUT",
+                    path=managed_state,
+                )
+        candidates = _bounded_tree_entries(root)
+    except OSError as exc:
+        raise ProjectError(f"cannot enumerate tested loose-mod source: {exc}", path=root) from exc
+    snapshots: list[FileSnapshot] = []
+    folded: dict[str, str] = {}
+    total = 0
+    limit = _legacy.MAX_ZIP_TOTAL_BYTES + (2 * _legacy.MAX_TEXT_ASSET_BYTES)
+    for path in candidates:
+        try:
+            if _is_link_like(path):
+                raise ProjectError(
+                    "symbolic links are not allowed in tested loose-mod sources", path=path
+                )
+            if path.is_dir():
+                continue
+            if not path.is_file():
+                raise ProjectError(
+                    "tested loose-mod source contains a non-regular entry", path=path
+                )
+        except OSError as exc:
+            raise ProjectError(f"cannot inspect tested source: {exc}", path=path) from exc
+        relative = path.relative_to(root).as_posix()
+        if relative == "Mod.hms":
+            continue
+        if relative not in {"Index.art", "Thumbnail.jpg"} and not relative.startswith("Ancient/"):
+            raise ProjectError(
+                f"tested loose-mod source contains an out-of-scope file: {relative}",
+                code="TESTED_SOURCE_LAYOUT",
+                path=path,
+            )
+        key = relative.casefold()
+        if key in folded:
+            raise ProjectError(
+                f"case-insensitive source collision: {folded[key]} and {relative}",
+                code="PATH_COLLISION",
+                path=path,
+            )
+        folded[key] = relative
+        snapshot = FileSnapshot.capture(path, relative)
+        total += snapshot.size
+        if total > limit:
+            raise ProjectError(
+                "tested loose-mod source exceeds the total size limit",
+                code="SOURCE_RESOURCE_LIMIT",
+                path=root,
+            )
+        snapshots.append(snapshot)
+    snapshots.sort(key=lambda snapshot: snapshot.relative_destination)
+    digest = hashlib.sha256(b"ACMK-LOOSE-MOD-TREE-V1\0")
+    for snapshot in snapshots:
+        encoded_path = snapshot.relative_destination.encode("utf-8")
+        digest.update(len(encoded_path).to_bytes(4, "big"))
+        digest.update(encoded_path)
+        digest.update(snapshot.size.to_bytes(8, "big"))
+        digest.update(bytes.fromhex(snapshot.sha256))
     fingerprint = SourceFingerprint(digest.hexdigest(), len(snapshots), total)
     return tuple(snapshots), fingerprint
 
@@ -2287,6 +2601,7 @@ def _analyse_runtime_log(
     *,
     project_name: str,
     game_semver: str,
+    achievement_impact: AchievementImpact = AchievementImpact.UNKNOWN,
 ) -> tuple[dict[str, Any], bool, bool]:
     summary = dict(_legacy.summarise_log(text))
     expected_title = project_name.casefold()
@@ -2307,6 +2622,15 @@ def _analyse_runtime_log(
         re.IGNORECASE,
     )
     game_version_observed = any(marker.search(line) is not None for line in text.splitlines())
+    if target_enabled and achievement_impact is AchievementImpact.DISABLED:
+        expected_achievement_warnings = sum(
+            _is_expected_achievement_warning(line, project_name)
+            for line in _normalised_warning_lines(text)
+        )
+        summary["warnings"] = max(
+            0,
+            int(summary.get("warnings", 0)) - expected_achievement_warnings,
+        )
     return summary, target_enabled, game_version_observed
 
 
@@ -2343,13 +2667,37 @@ def _runtime_blockers(
     return blockers
 
 
-def _warning_differential(runtime_text: str, baseline_text: str) -> tuple[int, int]:
+def _warning_differential(
+    runtime_text: str,
+    baseline_text: str,
+    *,
+    project_name: str = "",
+    allow_achievement_warning: bool = False,
+) -> tuple[int, int]:
     """Return baseline-signature-matched and remaining runtime warning occurrences."""
 
-    runtime_warnings = tuple(_normalised_warning_lines(runtime_text))
+    runtime_warnings = tuple(
+        warning
+        for warning in _normalised_warning_lines(runtime_text)
+        if not (
+            allow_achievement_warning and _is_expected_achievement_warning(warning, project_name)
+        )
+    )
     baseline_signatures = set(_normalised_warning_lines(baseline_text))
     ignored = sum(warning in baseline_signatures for warning in runtime_warnings)
     return ignored, len(runtime_warnings) - ignored
+
+
+def _is_expected_achievement_warning(normalized_line: str, project_name: str) -> bool:
+    """Match only Ancient Cities' normal ART/achievement notification for this project."""
+
+    if not project_name:
+        return False
+    pattern = re.compile(
+        r"Warning - This enabled Mod has \*\.art files that disables Achievements: "
+        rf"\[[^\[\]\r\n]+\] \({re.escape(project_name)}\)"
+    )
+    return pattern.fullmatch(normalized_line) is not None
 
 
 def _normalised_warning_lines(text: str) -> Iterable[str]:
@@ -2380,6 +2728,23 @@ def _save_impact_evidence_problem(
         and save_type is not RuntimeSaveType.EXISTING_DISPOSABLE
     ):
         return "save impact 'none-observed' requires an existing-disposable save test"
+    return None
+
+
+def _save_persistence_evidence_problem(
+    save_type: RuntimeSaveType,
+    save_persistence: SavePersistence,
+    *,
+    passed: bool,
+) -> str | None:
+    if save_type is RuntimeSaveType.NO_SAVE:
+        if save_persistence is not SavePersistence.NOT_APPLICABLE:
+            return "save type 'no-save' requires save persistence 'not-applicable'"
+        return None
+    if save_persistence is SavePersistence.NOT_APPLICABLE:
+        return "disposable save tests cannot use save persistence 'not-applicable'"
+    if passed and save_persistence is not SavePersistence.MANUAL_SAVE_RELOAD_PASSED:
+        return "passing new/existing-disposable save evidence requires 'manual-save-reload-passed'"
     return None
 
 

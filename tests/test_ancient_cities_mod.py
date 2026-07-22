@@ -63,6 +63,13 @@ def make_project(root: Path, *, title: str = "Synthetic Mod") -> Path:
     return root
 
 
+def standalone_building_art(*properties: str) -> str:
+    lines = ["Entity/Construction/Building:", "{", '\tName:"Entity"']
+    lines.extend(f"\t{property_line}" for property_line in properties)
+    lines.append("}")
+    return "\n".join(lines)
+
+
 class SyntheticTempTestCase(unittest.TestCase):
     """Use ordinary 0777 test dirs; Windows can make mode-0700 dirs token-private."""
 
@@ -164,6 +171,92 @@ class EncodingAndParserTests(unittest.TestCase):
 
 
 class ValidationTests(SyntheticTempTestCase):
+    def write_building(self, project: Path, identifier: str, *properties: str) -> Path:
+        path = project / "Ancient" / "Entity" / "Local" / "Building" / identifier / "Index.art"
+        write_art(path, standalone_building_art(*properties))
+        return path
+
+    def test_building_semantics_accept_positive_and_fractional_count_vectors(self) -> None:
+        for index, counts in enumerate(("1,1", "4,0.25")):
+            with self.subTest(counts=counts):
+                project = make_project(self.root / f"building-counts-{index}")
+                self.write_building(
+                    project,
+                    "SyntheticHut",
+                    f'ConstitutionCount:"{counts}"',
+                    'RequirementPercent:"0.25"',
+                    "Requirement:\"'~/Knowledge/One','~/Culture/Two'\"",
+                )
+                codes = {issue["code"] for issue in ac.validate_target(project)["issues"]}
+                self.assertNotIn("BUILDING_CONSTITUTION_COUNT", codes)
+                self.assertNotIn("BUILDING_REQUIREMENT_PAIR", codes)
+
+    def test_building_semantics_reject_non_positive_count_vectors(self) -> None:
+        for index, counts in enumerate(("0,0", "1,0", "1,-0.25")):
+            with self.subTest(counts=counts):
+                project = make_project(self.root / f"building-non-positive-{index}")
+                self.write_building(
+                    project,
+                    "SyntheticHut",
+                    f'ConstitutionCount:"{counts}"',
+                )
+                report = ac.validate_target(project)
+                self.assertFalse(report["valid"])
+                self.assertIn(
+                    "BUILDING_CONSTITUTION_COUNT",
+                    {issue["code"] for issue in report["issues"]},
+                )
+
+    def test_building_semantics_requires_both_requirement_fields_or_neither(self) -> None:
+        for index, lone_property in enumerate(
+            (
+                "Requirement:\"'~/Knowledge/One'\"",
+                'RequirementPercent:"0.25"',
+            )
+        ):
+            with self.subTest(property=lone_property):
+                project = make_project(self.root / f"building-requirement-pair-{index}")
+                self.write_building(
+                    project,
+                    "SyntheticHut",
+                    'ConstitutionCount:"1"',
+                    lone_property,
+                )
+                report = ac.validate_target(project)
+                self.assertFalse(report["valid"])
+                self.assertIn(
+                    "BUILDING_REQUIREMENT_PAIR",
+                    {issue["code"] for issue in report["issues"]},
+                )
+
+    def test_building_semantics_warns_only_for_direct_unproven_time_fields(self) -> None:
+        project = make_project(self.root / "building-time-fields")
+        self.write_building(
+            project,
+            "DirectTimeHut",
+            'ConstitutionCount:"1"',
+            'Year:"1200"',
+            'HistoryRangeYear:"1000,1400"',
+        )
+        direct_issues = [
+            issue
+            for issue in ac.validate_target(project)["issues"]
+            if issue["code"] == "BUILDING_TIME_FIELD_UNPROVEN"
+        ]
+        self.assertEqual(len(direct_issues), 1)
+        self.assertEqual(direct_issues[0]["severity"], "warning")
+        self.assertEqual(direct_issues[0]["detail"]["fields"], ["Year", "HistoryRangeYear"])
+
+        nested_project = make_project(self.root / "building-nested-time-field")
+        self.write_building(
+            nested_project,
+            "NestedTimeHut",
+            'ConstitutionCount:"1"',
+            'Component/History:{\n\t\tYear:"1200"\n\t}',
+        )
+        nested_codes = {issue["code"] for issue in ac.validate_target(nested_project)["issues"]}
+        self.assertNotIn("BUILDING_TIME_FIELD_UNPROVEN", nested_codes)
+
     def test_thumbnail_is_required_and_dimensions_are_checked(self) -> None:
         project = make_project(self.root / "thumbnail")
         (project / "Ancient" / "data.txt").write_bytes(b"data")

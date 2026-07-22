@@ -29,6 +29,7 @@ from .config import (
     RuntimeSaveType,
     RuntimeStatus,
     SaveImpact,
+    SavePersistence,
     SkeletonSource,
 )
 from .errors import (
@@ -82,6 +83,7 @@ from .project import (
     RuntimeTestResult,
     SDKProject,
     SourceFingerprint,
+    StagedArtifact,
 )
 from .reports import (
     CheckStatus,
@@ -96,6 +98,23 @@ from .reports import (
     envelope,
 )
 from .sdk import AncientCitiesSDK, DiscoveryOptions
+from .workshop import (
+    PUBLISH_PACKET_SCHEMA_VERSION,
+    WORKSHOP_APP_ID,
+    WORKSHOP_STATE_SCHEMA_VERSION,
+    CandidateKind,
+    PublishAction,
+    PublishPacket,
+    VisibilityControl,
+    WorkshopArtifact,
+    WorkshopState,
+    WorkshopStatus,
+    WorkshopSyncPlan,
+    WorkshopSyncResult,
+    WorkshopVisibility,
+    plan_workshop_sync,
+    prepare_publish_packet,
+)
 
 __all__ = [
     "ACMKError",
@@ -108,6 +127,7 @@ __all__ = [
     "BuildingScaffoldPlan",
     "BuildingScaffoldResult",
     "BuildingSpec",
+    "CandidateKind",
     "CheckStatus",
     "Compatibility",
     "ContractError",
@@ -135,7 +155,10 @@ __all__ = [
     "ObservedConsensusPlan",
     "ObservedConsensusResult",
     "PROJECT_SCHEMA_VERSION",
+    "PUBLISH_PACKET_SCHEMA_VERSION",
     "PlannedContent",
+    "PublishAction",
+    "PublishPacket",
     "ProjectConfig",
     "ProjectConfigPlan",
     "ProjectConfigResult",
@@ -153,6 +176,7 @@ __all__ = [
     "ReleaseResult",
     "RuntimeStatus",
     "RuntimeSaveType",
+    "SavePersistence",
     "RuntimeTestPlan",
     "RuntimeTestResult",
     "SDKProject",
@@ -162,6 +186,7 @@ __all__ = [
     "Severity",
     "SkeletonSource",
     "SourceFingerprint",
+    "StagedArtifact",
     "SourceChangedError",
     "SteamModId",
     "TextAssetKind",
@@ -171,9 +196,20 @@ __all__ = [
     "ValidationFailedError",
     "ValidationProfile",
     "ValidationReport",
+    "VisibilityControl",
+    "WORKSHOP_APP_ID",
+    "WORKSHOP_STATE_SCHEMA_VERSION",
+    "WorkshopArtifact",
+    "WorkshopState",
+    "WorkshopStatus",
+    "WorkshopSyncPlan",
+    "WorkshopSyncResult",
+    "WorkshopVisibility",
     "__version__",
     "envelope",
     "knowledge_topics",
+    "plan_workshop_sync",
+    "prepare_publish_packet",
     "read_knowledge",
     "search_knowledge",
 ]

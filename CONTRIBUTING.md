@@ -66,6 +66,14 @@ A claim that something works in game must include:
 - observed save and achievement effects;
 - minimal reproduction steps and sanitized logs, if relevant.
 
+For standalone-building availability reports, also record the Culture and Knowledge/XP state,
+the canonical and deployed `Index.art` SHA-256 values, and every temporary diagnostic delta.
+There is no proven direct `Year`/`HistoryRangeYear` building gate. Requirement fields may be
+omitted only together in a backed-up live non-numeric loose diagnostic copy, never canonical
+`src`; a positive ones-vector is a smoke probe only, and zero `ConstitutionCount` disables the
+tested catalogue entry. Restore exact canonical bytes and repeat the final clean launch, manual
+save, full exit, restart, and reload cycle before reporting success.
+
 Never test a proposed change first on a valued save. A successful static validation
 does not establish runtime compatibility.
 
@@ -76,3 +84,7 @@ They may ask for a smaller change or additional current-build evidence. Approval
 not transfer responsibility for third-party rights or in-game consequences. Releases
 follow [GOVERNANCE.md](GOVERNANCE.md), the [release checklist](docs/releasing.md), and
 use semantic versioning where practical.
+
+Pull-request or release approval is not consent to publish a Workshop item. Immediately before
+each Publish/Update, require a fresh single-use confirmation naming the exact action, candidate,
+items and SHA-256 hashes, app/item IDs, visibility, and current time window.

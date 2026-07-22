@@ -13,8 +13,19 @@ editors and integrations do not need a source checkout.
 - `acmk-runtime-test-v1.schema.json` validates sanitized manual runtime-test evidence.
 - `acmk-runtime-test-v2.schema.json` adds a versioned, warning-only clean-launch baseline
   differential. Existing occurrence-counted v2 evidence remains supported; new records use
-  repeat-insensitive normalized warning-signature membership. Existing v1 evidence also remains
-  supported.
+  repeat-insensitive normalized warning-signature membership.
+- `acmk-runtime-test-v3.schema.json` binds evidence to the explicitly selected tested loose-mod
+  root and records manual save/reload persistence. Its fingerprint covers only `Index.art`,
+  `Thumbnail.jpg`, and `Ancient/**`; the sole excluded game-managed file is an empty root
+  `Mod.hms`. A warning baseline is optional in v3 and may represent the same enabled candidate
+  set before save/reload; it can suppress warning signatures only, never errors or failures.
+- `acmk-workshop-state-v1.schema.json` validates persistent app `667610` identity, visibility,
+  bounded immutable predecessor IDs, and the last verified timestamp used by the dry-run-first
+  post-publication synchronization workflow.
+
+Existing v1 and v2 evidence remains parseable as legacy evidence and is never rewritten or
+silently upgraded. Because those versions do not attest the tested loose-mod root or save/reload
+persistence, release validation requires an explicit new v3 `record-test` before staging.
 
 `ProjectConfig` remains authoritative for cross-field rules that JSON Schema cannot express
 portably, including case-insensitive relation uniqueness, dependency/conflict overlap,

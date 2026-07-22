@@ -101,7 +101,11 @@ acmk --json discover
 ```
 
 The tools do not install or publish Workshop items automatically: review generated
-output before copying it into a local mod directory or uploading it through Steam.
+output before copying it into a local mod directory or uploading it through Steam. Immediately
+before every manual Publish/Update, re-hash the exact items and obtain single-use confirmation
+for one action on one mod, including the active-account preflight, candidate, target/item IDs,
+UI visibility state, complete publisher-input inventory and hashes, and current time window.
+Batch consent is invalid. Earlier approval to build, deploy, test, or retry does not carry over.
 
 ## Python SDK
 
@@ -150,9 +154,14 @@ acmk project import "<Documents>\Uncasual Games\Ancient Cities\Mod\MySkeleton" `
 Add `--apply` only after reviewing the plan. Use `acmk project configure` to record the
 version, license, contact, and provenance review. `configure`, `record-test`, and `stage`
 all preserve the same preview-first rule. Staging never deploys to the game and never
-publishes to Steam; changing runtime source after a recorded test invalidates release
-readiness. Configuration rewrites return a backup path and use a canonical layout, so keep
-custom notes in documentation rather than unsupported `acmk.toml` keys or comments.
+publishes to Steam. Runtime-test v3 requires the actually enabled loose root through
+`--tested-source` plus an explicit `--save-persistence` result. Release validation compares its
+scoped `Index.art`/`Thumbnail.jpg`/`Ancient/**` fingerprint to canonical `src`; only an empty
+game-managed root `Mod.hms` is ignored. A tested/canonical mismatch or a later canonical edit
+invalidates release readiness. Legacy v1/v2 evidence remains readable but must be explicitly
+re-recorded for release.
+Configuration rewrites return a backup path and use a canonical layout, so keep custom notes in
+documentation rather than unsupported `acmk.toml` keys or comments.
 
 If the current game's Generic creator is unavailable or silently fails, a `community-draft`
 may use the deliberately separate observed-consensus route on an explicitly supported exact
@@ -177,6 +186,66 @@ Release checks require the chosen license identifier and contact details to appe
 manifest Description or Content as well as the project metadata. These fields and a
 `reviewed` provenance status are author attestations; verify the underlying rights yourself
 and repeat the information in the manual Workshop listing.
+
+## Workshop publisher boundary
+
+`acmk project stage` creates a deterministic inspection package; it does not reproduce or call
+Steam's uploader. On the audited Ancient Cities client, the in-game publisher selected a
+non-numeric loose root (`Index.art`, `Thumbnail.jpg`, and `Ancient/**`) and built its own
+temporary `%TEMP%\ACZipMod\Mod.zip`. That temporary directory can survive an earlier attempt and
+its ZIP can differ byte-for-byte from ACMK's deterministic ZIP. Validate a fresh temporary
+package against the selected loose-file inventory, never copy the SDK ZIP into the live folder,
+and never use a stale temporary package as canonical project state.
+
+The SDK exposes that boundary without crossing it:
+
+```powershell
+acmk project publish-packet C:\mods\my-project `
+  --candidate-root "<Documents>\Uncasual Games\Ancient Cities\Mod\MyLooseMod" `
+  --candidate-kind loose --action publish --visibility public `
+  --visibility-control not-exposed --account-preflight-passed `
+  --generated-package-root "$env:TEMP\ACZipMod"
+
+acmk project sync-workshop-id C:\mods\my-project `
+  --from-live "<Documents>\Uncasual Games\Ancient Cities\Mod\MyLooseMod" `
+  --visibility public
+```
+
+The first command only returns an expiring, content-addressed packet and records no consent;
+packet creation double-checks the loose files and optional game-generated ZIP members. Rerun the
+CLI immediately before confirmation; Python callers can use `PublishPacket.assert_active()` to
+re-hash an in-memory packet. The second command is a dry run until `--apply` is added. It writes a verified assigned ID atomically,
+stores collision-safe backups below `.acmk/backups`, preserves deleted predecessor IDs, and
+resets runtime readiness only when identity actually changes.
+
+For first publication on the audited client, the green upload arrow opened a **Yes/No** modal;
+it did not expose title/details or a visibility selector. State that absence explicitly in the
+one-mod confirmation packet and stop before **Yes**. After success, fully exit, verify the live
+manifest again contains the current `GameVersion` and newly assigned nonzero `SteamModId`, and
+confirm the Steam content/preview/final-success logs plus the remote item.
+
+If an old id belongs to another account or has been deleted, keep that predecessor project and
+its nonzero id immutable. After live ownership/existence checks, create a separately named sibling
+successor at `SteamModId 0,0` with fresh test and release evidence. Synchronize only the verified
+new id and compatibility metadata back into that successor; a canonical manifest change
+invalidates fingerprints, runtime evidence, and staging until they are deliberately refreshed.
+See the offline [publishing workflow](skills/ancient-cities-modding/references/workflows.md#workshop-preparation)
+for the dated Error 9 distinctions and full procedure.
+
+## Standalone-building runtime boundary
+
+On the audited build, standalone-building availability is evidenced through Culture progression
+plus Knowledge references and XP thresholds; no direct `Year` or `HistoryRangeYear` building
+gate has been proven. Keep canonical construction counts positive and content-correct: a zero
+`ConstitutionCount` disabled the tested catalogue entry, while a positive ones-vector is only a
+minimal smoke probe.
+
+Never remove availability requirements from canonical `src` or a release. If diagnosis requires
+it, omit `Requirement` and `RequirementPercent` together only in a backed-up live non-numeric
+loose copy while the game is exited. Restore the exact canonical bytes and verify the hash, then
+complete a final clean launch, explicit manual save, full exit, restart, and reload before making
+a compatibility claim. The [standalone building guide](docs/standalone-buildings.md) contains the
+complete procedure.
 
 ## Starter models
 

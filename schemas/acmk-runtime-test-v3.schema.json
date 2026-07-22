@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/anubissbe/ac-modding-kit/main/schemas/acmk-runtime-test-v3.schema.json",
+  "title": "ACMK sanitized runtime-test evidence v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "recorded_at",
+    "runtime_status",
+    "compatibility",
+    "log_sha256",
+    "log_summary",
+    "source_fingerprint",
+    "environment"
+  ],
+  "properties": {
+    "schema_version": {"const": 3},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "runtime_status": {"enum": ["passed", "failed"]},
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["game_version", "game_semver", "steam_build_id", "content_hash"],
+      "properties": {
+        "game_version": {"type": "string", "pattern": "^[0-9]+$"},
+        "game_semver": {"type": "string", "minLength": 1},
+        "steam_build_id": {"type": "string", "pattern": "^[0-9]+$"},
+        "content_hash": {"type": "string", "pattern": "^[0-9A-Fa-f]+$"}
+      }
+    },
+    "log_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "log_summary": {"$ref": "#/$defs/logSummary"},
+    "warning_baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "log_sha256",
+        "log_summary",
+        "ignored_warnings",
+        "unmatched_warnings"
+      ],
+      "properties": {
+        "algorithm": {
+          "enum": [
+            "normalized-warning-line-multiset-v1",
+            "normalized-warning-signature-set-v1"
+          ]
+        },
+        "log_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "log_summary": {"$ref": "#/$defs/logSummary"},
+        "ignored_warnings": {"type": "integer", "minimum": 0},
+        "unmatched_warnings": {"type": "integer", "minimum": 0}
+      }
+    },
+    "source_fingerprint": {
+      "description": "Fingerprint of Index.art, Thumbnail.jpg, and Ancient/** in the explicitly selected tested loose-mod root; an empty game-managed Mod.hms is excluded.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "sha256", "files", "bytes"],
+      "properties": {
+        "algorithm": {"const": "sha256-loose-mod-v1"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "files": {"type": "integer", "minimum": 2},
+        "bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operating_system",
+        "toolkit_version",
+        "clean_launch",
+        "save_type",
+        "save_persistence",
+        "tested_mod",
+        "observed_game_semver"
+      ],
+      "properties": {
+        "operating_system": {"type": "string", "minLength": 1},
+        "toolkit_version": {"type": "string", "minLength": 1},
+        "clean_launch": {"type": "boolean"},
+        "save_type": {"enum": ["new-disposable", "existing-disposable", "no-save"]},
+        "save_persistence": {
+          "enum": [
+            "manual-save-reload-passed",
+            "failed",
+            "not-tested",
+            "not-applicable"
+          ]
+        },
+        "tested_mod": {"type": "string"},
+        "observed_game_semver": {"type": "string"}
+      }
+    }
+  },
+  "$defs": {
+    "logSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lines", "warnings", "errors_or_failures", "mods_enabled"],
+      "properties": {
+        "lines": {"type": "integer", "minimum": 0},
+        "warnings": {"type": "integer", "minimum": 0},
+        "errors_or_failures": {"type": "integer", "minimum": 0},
+        "mods_enabled": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"runtime_status": {"const": "passed"}},
+        "required": ["runtime_status"]
+      },
+      "then": {
+        "properties": {
+          "log_summary": {
+            "properties": {
+              "lines": {"type": "integer", "minimum": 1},
+              "errors_or_failures": {"const": 0},
+              "mods_enabled": {"type": "integer", "minimum": 1}
+            }
+          },
+          "warning_baseline": {
+            "properties": {"unmatched_warnings": {"const": 0}}
+          },
+          "environment": {
+            "properties": {
+              "clean_launch": {"const": true},
+              "tested_mod": {"type": "string", "minLength": 1},
+              "observed_game_semver": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "properties": {"runtime_status": {"const": "passed"}},
+            "required": ["runtime_status"]
+          },
+          {"not": {"required": ["warning_baseline"]}}
+        ]
+      },
+      "then": {
+        "properties": {
+          "log_summary": {
+            "properties": {"warnings": {"const": 0}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "environment": {
+            "properties": {"save_type": {"const": "no-save"}},
+            "required": ["save_type"]
+          }
+        },
+        "required": ["environment"]
+      },
+      "then": {
+        "properties": {
+          "environment": {
+            "properties": {"save_persistence": {"const": "not-applicable"}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "environment": {
+            "properties": {
+              "save_type": {"enum": ["new-disposable", "existing-disposable"]}
+            },
+            "required": ["save_type"]
+          }
+        },
+        "required": ["environment"]
+      },
+      "then": {
+        "properties": {
+          "environment": {
+            "properties": {
+              "save_persistence": {
+                "enum": ["manual-save-reload-passed", "failed", "not-tested"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "properties": {"runtime_status": {"const": "passed"}},
+            "required": ["runtime_status"]
+          },
+          {
+            "properties": {
+              "environment": {
+                "properties": {
+                  "save_type": {"enum": ["new-disposable", "existing-disposable"]}
+                },
+                "required": ["save_type"]
+              }
+            },
+            "required": ["environment"]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "environment": {
+            "properties": {
+              "save_persistence": {"const": "manual-save-reload-passed"}
+            }
+          }
+        }
+      }
+    }
+  ]
+}
