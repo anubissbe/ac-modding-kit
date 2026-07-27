@@ -113,6 +113,11 @@ Release validation requires the exact supported compatibility fingerprint, profi
 Generic manifest structure, and a fresh passing runtime test. A game update makes the
 profile unsupported until a new audit is added.
 
+The current exact-build Generic profiles are Ancient Cities 1.9.3 / Steam build 23915225 /
+`GameVersion` 22 and Ancient Cities 1.9.5 / Steam build 24378812 / `GameVersion` 22, each
+bound to its audited content hash. Matching only the semantic version or `GameVersion` is
+insufficient.
+
 The evidence record binds the complete current root manifest. If a reconciled project later
 changes canonical Description, Changelog, Content, or Steam ID metadata, release validation
 will stop until `reconcile-consensus` is previewed and applied again. That refresh preserves
@@ -130,8 +135,8 @@ skeleton or reconciled through one supported exact-build observed-consensus prof
 
 `AncientPath`, `GameVersion`, `SteamModId`, `ManifestSpec`, `Utf16TextDocument`, and
 `ManifestDocument` provide validated value objects. ART/LOC generation always uses exactly
-one UTF-16LE BOM. Engine references such as `~/`, `/System/`, and `../` remain opaque and
-are never resolved as files.
+one UTF-16LE BOM. Engine references such as `~/`, `/Ancient/`, `/System/`, and `../` remain
+opaque and are never resolved as files.
 
 ## Validation and staging
 
@@ -170,14 +175,19 @@ For a warning differential, pass a distinct clean-launch or pre-save/reload log 
 `--baseline-log`. The same tested mod or combined enabled-mod set may already be present in that
 baseline; this supports one canonical launch followed by manual save, full exit, restart, and
 reload evidence. ACMK removes timestamps and the engine's leading `Warning - [n]` occurrence
-ordinal, then compares normalized warning-signature membership and records both hashes plus the
-sanitized differential. Repeated occurrences of an allowed baseline signature do not block a
-passing test. The baseline must identify the same game version. New warning signatures and every
-runtime error or failure in the candidate log remain blocking—baseline errors are never
-subtracted. Raw logs and private absolute paths are still excluded from the project.
+ordinal. Warning-baseline algorithm v2 additionally replaces only an exact, terminal 14-digit
+`User/Save` cleanup-directory id in Ancient Cities' `_wrmdir` warning; the surrounding path and
+case remain significant. ACMK then compares normalized warning-signature membership and records
+both hashes plus the sanitized differential. Repeated occurrences of an allowed baseline
+signature do not block a passing test. The baseline must identify the same game version. New
+warning signatures and every runtime error or failure in the candidate log remain blocking—
+baseline errors are never subtracted. Raw logs and private absolute paths are still excluded
+from the project.
 
-All new records use v3, with or without a warning baseline. Existing v1/v2 files and the legacy
-v2 occurrence-counted algorithm remain parseable for diagnostics, but release validation emits
+All new records use runtime-record schema v3 and warning-signature algorithm v2, with or without
+a warning baseline. Existing runtime-record schema v1/v2 files and warning algorithms
+`normalized-warning-line-multiset-v1` and `normalized-warning-signature-set-v1` remain parseable
+for diagnostics, but release validation emits
 `RELEASE_RUNTIME_EVIDENCE_MIGRATION_REQUIRED`; explicitly run `record-test` with
 `--tested-source` and `--save-persistence` to replace them.
 

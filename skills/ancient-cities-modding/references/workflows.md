@@ -55,6 +55,27 @@ The diagnostic copy is disposable evidence. Never publish it, synchronize it bac
 or treat catalogue visibility alone as proof that construction, persistence, or progression is
 correct.
 
+For monument-scale cumulative construction/decay snapshots and Culture/Knowledge-gated wonders,
+follow [content-patterns.md](content-patterns.md). Direct calendar and geographic building gates
+remain unverified on the audited build.
+
+## Culture timelines and evolving availability
+
+Treat archaeological or regional research layers as authoring inputs, not runtime Culture IDs.
+Compile them into current, proven engine Culture entities. Validate every consecutive frame so
+combined playable availability never retreats and each predecessor-to-successor handoff is
+gap-free. Then inspect representative early, transition, and late start maps in an isolated
+runtime test. See [content-patterns.md](content-patterns.md) for the mask invariant and test
+matrix.
+
+## Generic activity tools
+
+A tool using the generic Fish component is a hand-held worker tool, not a passive placed net.
+Compare its Fish score with every currently available competitor and make an intended upgrade
+strictly better. Prove use by observing crafting, worker equipment, the fishing activity, and a
+fish inventory increase; a clean load or visible recipe is insufficient. See
+[content-patterns.md](content-patterns.md).
+
 ## Localization
 
 1. Create a language skeleton with the in-game New language action.
@@ -96,6 +117,11 @@ acmk log
 ```
 
 Treat `ERROR`, `Warning`, `failed to load`, `needs to be updated`, obsolete packaging, missing Type, image failures, and unresolved Mesh/Render references as failures relevant to the affected mod.
+
+Use the feature-specific matrix in [content-patterns.md](content-patterns.md) and the reusable
+[isolated runtime test record](isolated-runtime-test.md). A complete isolated pass includes an
+explicit manual save, full exit, clean restart, reload, repeated essential behavior, log review,
+and exact restoration of the previous configuration.
 
 ## Conflict diagnosis
 

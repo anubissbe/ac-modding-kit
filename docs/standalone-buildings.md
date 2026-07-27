@@ -34,7 +34,7 @@ current = sdk.discover()
 if current.game_version is None:
     raise RuntimeError("The installed game's internal GameVersion was not discovered")
 
-stick_material = EngineReference(
+stick_render = EngineReference(
     "~/Entity/Local/Resource/List/Stick/Asset/AsMaterial/Material"
 )
 stick_resource = EngineReference("~/Entity/Local/Resource/List/Stick/Entity")
@@ -47,7 +47,7 @@ spec = BuildingSpec(
     preview_model=BuildingAssetPath("Blueprint.fbx"),
     default_models=(
         BuildingModel(
-            "Struct", BuildingAssetPath("Struct_Default.fbx"), stick_material
+            "Struct", BuildingAssetPath("Struct_Default.fbx"), stick_render
         ),
     ),
     construction_stages=(
@@ -57,7 +57,7 @@ spec = BuildingSpec(
             10,
             (
                 BuildingModel(
-                    "Struct", BuildingAssetPath("Struct_Build_00.fbx"), stick_material
+                    "Struct", BuildingAssetPath("Struct_Build_00.fbx"), stick_render
                 ),
             ),
         ),
@@ -67,7 +67,7 @@ spec = BuildingSpec(
             24,
             (
                 BuildingModel(
-                    "Struct", BuildingAssetPath("Struct_Build_01.fbx"), stick_material
+                    "Struct", BuildingAssetPath("Struct_Build_01.fbx"), stick_render
                 ),
             ),
         ),
@@ -77,7 +77,7 @@ spec = BuildingSpec(
             "00-Light",
             (
                 BuildingModel(
-                    "Struct", BuildingAssetPath("Struct_Decay_00.fbx"), stick_material
+                    "Struct", BuildingAssetPath("Struct_Decay_00.fbx"), stick_render
                 ),
             ),
         ),
@@ -123,6 +123,23 @@ and knowledge requirements still need an isolated in-game test. ACMK accepts pos
 construction counts no greater than 1,000,000 as a defensive serialization limit; that range
 is not an engine guarantee.
 
+The third `BuildingModel` argument is retained under the alpha API's `material` field name, but
+it is a Render-node target. Do not pass a raw Material node. The scaffold recognizes the audited
+MudWall and MudWallDecay material paths and emits one local `Render/Full` wrapper for each used
+material. Model bindings then use the exact absolute self-reference
+`/Ancient/Entity/Local/Building/List/<EntityId>/Asset/<RenderName>`; `/List/` is required even
+though it is absent from the payload directory. Other raw materials are not inferred or wrapped.
+Verify their node type from a current exemplar.
+
+For a monument or wonder, one blueprint, five cumulative construction snapshots, a material-
+complete Default snapshot, and two complete decay snapshots form a strong review set. Each stage
+must contain the full visible state at that moment rather than only the newly added resource.
+Construction-only ropes, ramps, scaffolds, or lifting timbers should not leak into Default when
+they are not part of the completed monument. This is an authoring pattern, not a universal engine
+minimum; ordering, decay transitions, repair, entrances, and routing remain runtime tests. See
+the offline [content authoring patterns](../skills/ancient-cities-modding/references/content-patterns.md)
+and the [isolated runtime test record](../skills/ancient-cities-modding/references/isolated-runtime-test.md).
+
 ## Runtime availability and diagnostic boundary
 
 The audited building flow exposes availability through Culture progression plus Knowledge
@@ -130,6 +147,11 @@ references and their XP thresholds. No direct building gate through `Year` or
 `HistoryRangeYear` has been proven. Model historical progression with current Culture and
 Knowledge exemplars unless a new same-category exemplar and runtime test establish another
 mechanism.
+
+Research-layer identifiers used to design a historical map are not runtime Culture entities.
+Only reference a Culture path that exists in the current base or candidate. When an exact year or
+regional gate is historically important but unproven in the engine, state the limitation and use
+proven Culture plus Knowledge XP as an explicit gameplay approximation.
 
 Keep canonical `src` counts positive and content-correct. A zero `ConstitutionCount` disabled
 the tested catalogue entry. A same-length positive ones-vector may be used only as a minimal
@@ -158,7 +180,7 @@ results keep load-order relations distinct from engine-node references: use
 | Building LOC | Runtime-proven v1.9.3 layout: LF-only, no terminal newline, exactly one UTF-16LE BOM, and the required localization markers | Re-test this byte contract after a game update |
 | Availability | Requirement vectors align exactly; construction counts are positive finite values | Culture plus Knowledge/XP is observed; direct `Year`/`HistoryRangeYear` building gates are unproven, and temporary omission/ones-vector probes are never release data |
 | Engine references | Typed external-reference syntax plus an exact-case current base-file anchor when available | Nodes inside that file remain engine-defined and runtime-verified |
-| Models | Every role has an exact-case, case-insensitively unambiguous FBX path and a binary or ASCII FBX signature | Blender import, axes, materials, animation, and rendering need specialist and runtime tests |
+| Models | Every role has an exact-case, case-insensitively unambiguous FBX path and a binary or ASCII FBX signature; audited Mud materials receive local `Render/Full` wrappers with absolute `/Ancient/.../Building/List/...` self-references | Other Render-node types, Blender import, axes, materials, animation, and rendering need specialist and runtime tests |
 | Icon | Valid 128x128, 32-bit true-color TGA; raw or RLE with dimensions bounded before packet validation | Visual quality is a human review |
 | Location mask | Exact `LocationMask.tga`, explicit ART binding, valid 8-bit grayscale TGA, dimensions equal `location_size`, with dimensions bounded before packet validation | Placement and pathfinding require a disposable save |
 | Mod relations | Case-insensitive uniqueness and no dependency/conflict overlap; values enter `acmk.toml` | Installed load-order resolution is a separate conflict check |

@@ -5,7 +5,7 @@ official engine guarantee.
 
 | Area | Status | Boundary |
 | --- | --- | --- |
-| Root manifest and overlay layout | Supported | Current game skeleton is preferred; exact-build observed-consensus profiles require local evidence and a fresh runtime test |
+| Root manifest and overlay layout | Supported | Current game skeleton is preferred; Generic observed-consensus profiles cover exact builds 1.9.3/23915225 and 1.9.5/24378812 only, with pinned `GameVersion` and content hash, local evidence, and a fresh runtime test |
 | `.art` and `.loc` encoding | Supported | UTF-16LE with exactly one BOM; unknown syntax is preserved |
 | Validation, conflicts, deterministic ZIP staging | Supported | Static/tool compatibility only |
 | Languages, landmarks, rivers, fonts, height maps | Supported workflow | Requires current same-category exemplar and in-game test |

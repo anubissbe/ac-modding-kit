@@ -47,9 +47,30 @@ The game explicitly validates presence of Title, Description, Changelog, and Gam
 - Preserve the original newline convention and byte round-trip.
 - Do not globally reformat `.art`; some files contain very large inline payloads or engine-specific data.
 - Mirror the exact base path and filename to override a definition. Use a new exact-case path to add a new entity.
-- Treat `~/`, `/System/...`, and `../` as engine node references, not filesystem paths.
+- Treat `~/`, `/Ancient/...`, `/System/...`, and `../` as engine node references, not
+  filesystem paths.
 - Resolve literal `File:"...ext"` references relative to the containing definition unless a current exemplar proves otherwise.
 - Match case exactly even on Windows. ZIP and the engine's virtual namespace can expose case mistakes.
+
+### Render bindings and additive self-references
+
+On the audited 1.9.3 / GameVersion 22 build, `Tx/Render.Render` resolves a Render node. It must not
+point directly at a Material node. A base path whose final name is `Material` may still be a
+Render node, so determine the node type from the current ART exemplar rather than its path name.
+
+The audited `MudWall` and `MudWallDecay` nodes are Material nodes. Reuse them by declaring local
+`Render/Full` wrappers (for example below the building's `Asset` group), then point every
+`Tx/Render.Render` at the wrapper. An additive local building's absolute reference to that local
+node uses this exact namespace shape:
+
+```text
+/Ancient/Entity/Local/Building/List/<EntityId>/Asset/<RenderName>
+```
+
+The `/List/` segment is required even though the payload file lives at
+`Ancient/Entity/Local/Building/<EntityId>/Index.art`. Do not derive an engine-node reference by
+copying the on-disk payload path, and do not replace this proven absolute self-reference with a
+`~/Entity/...` form without a new same-category runtime test.
 
 Localization files use `#<node-path>` markers followed by their value or script. Use exactly one leading `#`, no invisible prefix, and no accidental whitespace in the path. Retain UTF-16LE BOM. Use ASCII folder/identifier names unless a current working example proves a wider character set safe.
 

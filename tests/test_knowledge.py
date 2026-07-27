@@ -24,7 +24,10 @@ class BundledKnowledgeTests(unittest.TestCase):
         ids = [topic.id for topic in bundled]
 
         self.assertEqual(ids, sorted(ids))
+        self.assertIn("balance-and-engine-boundaries", ids)
+        self.assertIn("content-patterns", ids)
         self.assertIn("format-and-layout", ids)
+        self.assertIn("isolated-runtime-test", ids)
         self.assertIn("workflows", ids)
         self.assertTrue(all(topic.title for topic in bundled))
 
@@ -37,6 +40,65 @@ class BundledKnowledgeTests(unittest.TestCase):
         self.assertEqual(document.topic.id, "format-and-layout")
         self.assertTrue(document.text.startswith("# Format and layout"))
         self.assertIn("UTF-16LE", document.text)
+
+    def test_balance_and_engine_boundaries_are_available_offline(self) -> None:
+        document = knowledge.read("balance-and-engine-boundaries")
+
+        self.assertEqual(document.topic.title, "Balance fields and engine boundaries")
+        self.assertIn("Steam build `23915225`", document.text)
+        self.assertIn("internal `GameVersion 22`", document.text)
+        self.assertIn("D9BF481D195671BF9CB98274B4CFF604", document.text)
+        self.assertIn('Nutrition:"2200"', document.text)
+        self.assertIn("PitHutSmall/Stone", document.text)
+        self.assertIn("JobLimit", document.text)
+        self.assertIn("No `SeedCount`", document.text)
+        self.assertIn("Do not decompile or disassemble", document.text)
+        self.assertIn("Required runtime evidence", document.text)
+
+        nutrition_hits = knowledge.search("calories per day", topic="balance-and-engine-boundaries")
+        workgroup_hits = knowledge.search(
+            "number of workgroups", topic="balance-and-engine-boundaries"
+        )
+        ai_hits = knowledge.search("decision tree", topic="balance-and-engine-boundaries")
+        group_count_hits = knowledge.search(
+            "group-count scalar", topic="balance-and-engine-boundaries"
+        )
+        process_work_hits = knowledge.search(
+            "ProcessTaskWorkPercent", topic="balance-and-engine-boundaries"
+        )
+        self.assertTrue(nutrition_hits)
+        self.assertTrue(workgroup_hits)
+        self.assertTrue(ai_hits)
+        self.assertTrue(group_count_hits)
+        self.assertTrue(
+            any("not localized" in hit.excerpt for hit in process_work_hits),
+            "ProcessTaskWorkPercent must remain explicitly unproven",
+        )
+
+    def test_content_authoring_patterns_are_available_offline(self) -> None:
+        document = knowledge.read("content-patterns")
+
+        self.assertEqual(document.topic.title, "Content authoring patterns")
+        self.assertIn("A[t, p] >= A[t-1, p]", document.text)
+        self.assertIn("five cumulative", document.text)
+        self.assertIn("two complete decay snapshots", document.text)
+        self.assertIn("Tx/Render.Render", document.text)
+        self.assertIn("/Building/List/<EntityId>/Asset/<RenderName>", document.text)
+        self.assertIn("reusable hand-held tool", document.text)
+        self.assertIn("fully exit, restart from a clean launch, reload", document.text)
+
+        culture_hits = knowledge.search("research layers", topic="content-patterns")
+        fish_hits = knowledge.search("passive net", topic="content-patterns")
+        runtime_hits = knowledge.search("isolated runtime test", topic="content-patterns")
+        self.assertTrue(culture_hits)
+        self.assertTrue(fish_hits)
+        self.assertTrue(runtime_hits)
+
+        template = knowledge.read("isolated-runtime-test")
+        self.assertIn("Pre-test configuration SHA-256", template.text)
+        self.assertIn("Culture timeline extension", template.text)
+        self.assertIn("Generic Fish-tool extension", template.text)
+        self.assertIn("does not authorize Workshop Publish or Update", template.text)
 
     def test_workshop_publish_recovery_is_available_offline(self) -> None:
         error_15 = knowledge.search("Error 15", topic="workflows")
