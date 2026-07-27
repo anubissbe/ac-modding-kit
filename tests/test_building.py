@@ -28,6 +28,8 @@ from acmk import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MATERIAL = EngineReference("~/Entity/Local/Resource/List/Stick/Asset/AsMaterial/Material")
+MUD_WALL = EngineReference("~/Entity/Local/Resource/List/Mud/AsMaterial/MudWall")
+MUD_WALL_DECAY = EngineReference("~/Entity/Local/Resource/List/Mud/AsMaterial/MudWallDecay")
 
 
 def synthetic_jpeg(width: int = 512, height: int = 512) -> bytes:
@@ -238,6 +240,51 @@ class BuildingScaffoldTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(acmk.ContractError, "align exactly"):
             replace(ungated, requirement_percent=(0.25,))
+
+    def test_mud_materials_use_local_render_wrappers_and_absolute_list_self_refs(self) -> None:
+        spec = building_spec(material=MUD_WALL)
+        decay = spec.decay_stages[0]
+        spec = replace(
+            spec,
+            decay_stages=(
+                replace(
+                    decay,
+                    models=(
+                        BuildingModel(
+                            "Struct",
+                            BuildingAssetPath("Struct_Decay_00.fbx"),
+                            MUD_WALL_DECAY,
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        art = spec.render_index_art().text
+        mud_render = "/Ancient/Entity/Local/Building/List/SyntheticBranchHut/Asset/Mud"
+        mud_decay_render = "/Ancient/Entity/Local/Building/List/SyntheticBranchHut/Asset/MudDecay"
+        render_targets = [
+            line.strip()[len('Render:"') : -1]
+            for line in art.splitlines()
+            if line.strip().startswith('Render:"')
+        ]
+
+        self.assertEqual(art.count("Render/Full:"), 2)
+        self.assertIn(f"Material:\"'{MUD_WALL.value}'\"", art)
+        self.assertIn(f"Material:\"'{MUD_WALL_DECAY.value}'\"", art)
+        self.assertEqual(art.count('MaskDepth:"0"'), 1)
+        self.assertEqual(set(render_targets), {mud_render, mud_decay_render})
+        self.assertNotIn(MUD_WALL.value, render_targets)
+        self.assertNotIn(MUD_WALL_DECAY.value, render_targets)
+        self.assertNotIn(
+            "/Ancient/Entity/Local/Building/SyntheticBranchHut/",
+            art,
+        )
+        self.assertEqual(EngineReference(mud_render).value, mud_render)
+
+        builder = self.builder(spec=spec)
+        self.add_valid_assets(builder)
+        self.assertTrue(builder.validate().valid)
 
     def test_constitution_counts_accept_positive_numbers_and_render_canonically(self) -> None:
         spec = building_spec()

@@ -40,7 +40,16 @@ Create mods against the user's installed build and the game's own data-driven ov
 ## Route by task
 
 - For manifest, `.art`, `.loc`, virtual paths, assets, or ZIP layout, read [format-and-layout.md](references/format-and-layout.md).
-- For balance overrides, new entities, standalone-building availability/catalogue diagnosis, localization, textures/models/audio, testing, rebasing, and publishing, read the matching section of [workflows.md](references/workflows.md).
+- For balance or community-patch feasibility, food, crops, production, decay,
+  workgroups, AI, events, UI, or historical-time boundaries, read
+  [balance-and-engine-boundaries.md](references/balance-and-engine-boundaries.md), then
+  follow the matching implementation section of [workflows.md](references/workflows.md).
+- For new entities, standalone-building availability/catalogue diagnosis, localization,
+  textures/models/audio, testing, rebasing, and publishing, read the matching section of
+  [workflows.md](references/workflows.md).
+- For evolving culture masks, culture-specific wonders, generic Fish tools, cumulative visual
+  stages, or an isolated functional test matrix, read
+  [content-patterns.md](references/content-patterns.md).
 - For licensing, contact details, provenance, privacy, monetization, Steam publication, or external sharing, read [legal-and-publishing.md](references/legal-and-publishing.md).
 - For Workshop Publish/Update, preview failures, missing listings, or Steam error codes, read the Workshop preparation and troubleshooting sections in [workflows.md](references/workflows.md), then verify the live Steam configuration and logs.
 - For claims derived from the user-supplied Steam Workshop article index, read [forum-articles.md](references/forum-articles.md). Prefer newer official statements and the live local build when sources conflict.

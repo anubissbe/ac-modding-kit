@@ -56,8 +56,8 @@ def _validate_segments(value: str, *, label: str) -> tuple[str, ...]:
 class AncientPath:
     """Exact virtual file path rooted at ``Ancient/``.
 
-    Engine references such as ``~/``, ``/System/`` and ``../`` are deliberately
-    not represented by this type; they are opaque references, not files.
+    Engine references such as ``~/``, ``/Ancient/``, ``/System/`` and ``../`` are
+    deliberately not represented by this type; they are opaque references, not files.
     """
 
     value: str
@@ -108,7 +108,7 @@ class EngineReference:
             raise UnsafePathError("engine reference must be a string")
         if not self.value or "\x00" in self.value:
             raise UnsafePathError("engine reference cannot be empty or contain NUL")
-        if not self.value.startswith(("~/", "/System/", "../")):
+        if not self.value.startswith(("~/", "/Ancient/", "/System/", "../")):
             raise UnsafePathError("value is not a recognized opaque engine reference")
 
 

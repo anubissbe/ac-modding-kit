@@ -32,6 +32,18 @@ _CATEGORY = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,63}\Z")
 _LOCALE = re.compile(r"[a-z]{2,3}(?:-[A-Z]{2})?\Z")
 _FBX_BINARY_HEADER = b"Kaydara FBX Binary  \x00\x1a\x00"
 _MAX_CONSTRUCTION_STAGE_COUNT = 1_000_000
+_LOCAL_MATERIAL_RENDER_WRAPPERS = (
+    (
+        EngineReference("~/Entity/Local/Resource/List/Mud/AsMaterial/MudWall"),
+        "Mud",
+        0,
+    ),
+    (
+        EngineReference("~/Entity/Local/Resource/List/Mud/AsMaterial/MudWallDecay"),
+        "MudDecay",
+        None,
+    ),
+)
 _FIXED_REFERENCES = (
     EngineReference("~/Entity/Local/Building/Asset/DistanceRange.Value"),
     EngineReference("~/Entity/Local/Building/Asset/Master"),
@@ -70,7 +82,13 @@ class BuildingAssetPath:
 
 @dataclass(frozen=True, slots=True)
 class BuildingModel:
-    """One FBX render binding and its already-installed engine material."""
+    """One FBX binding and its render target.
+
+    ``material`` is retained as the public field name for compatibility with the
+    initial alpha API.  Its value must identify an engine Render node, not a raw
+    Material node.  The two audited MudWall material nodes are the narrow
+    exception: the scaffold emits local ``Render/Full`` wrappers for them.
+    """
 
     name: str
     file: BuildingAssetPath
@@ -83,7 +101,7 @@ class BuildingModel:
             raise ContractError("building model name must be a short ASCII identifier")
         if not isinstance(self.file, BuildingAssetPath) or self.file.suffix.casefold() != ".fbx":
             raise ContractError("building models require a typed .fbx BuildingAssetPath")
-        _validate_external_reference(self.material, label="building model material")
+        _validate_external_reference(self.material, label="building model render target")
         if isinstance(self.z_layer, bool) or not isinstance(self.z_layer, int):
             raise ContractError("building model z_layer must be an integer")
         if not 0 <= self.z_layer <= 1_000_000:
@@ -885,6 +903,9 @@ def _render_building_art(spec: BuildingSpec) -> str:
     _line(lines, 0, "}")
     _line(lines, 0)
 
+    if _render_local_material_wrappers(lines, spec):
+        _line(lines, 0)
+
     _line(lines, 0, "Instancer/Tx:")
     _line(lines, 0, "{")
     _line(lines, 1, 'Name:"Instancer"')
@@ -901,6 +922,7 @@ def _render_building_art(spec: BuildingSpec) -> str:
         level=2,
         name="Build",
         stages=tuple((stage.name, stage.models) for stage in spec.construction_stages),
+        spec=spec,
     )
     _line(lines, 2)
     _render_stage_collection(
@@ -908,9 +930,10 @@ def _render_building_art(spec: BuildingSpec) -> str:
         level=2,
         name="Decay",
         stages=tuple((stage.name, stage.models) for stage in spec.decay_stages),
+        spec=spec,
     )
     _line(lines, 2)
-    _render_proxy(lines, 2, "Default", spec.default_models, "../../")
+    _render_proxy(lines, 2, "Default", spec.default_models, "../../", spec=spec)
     _line(lines, 1, "}")
     _line(lines, 0, "}")
     _line(lines, 0)
@@ -1042,6 +1065,7 @@ def _render_stage_collection(
     level: int,
     name: str,
     stages: tuple[tuple[str, tuple[BuildingModel, ...]], ...],
+    spec: BuildingSpec,
 ) -> None:
     _line(lines, level, "Group:")
     _line(lines, level, "{")
@@ -1052,9 +1076,42 @@ def _render_stage_collection(
         _line(lines, level + 1, "{")
         _line(lines, level + 2, f'Name:"{stage_name}"')
         _line(lines, level + 2)
-        _render_proxy(lines, level + 2, f"{index:02d}", models, "../../../../")
+        _render_proxy(
+            lines,
+            level + 2,
+            f"{index:02d}",
+            models,
+            "../../../../",
+            spec=spec,
+        )
         _line(lines, level + 1, "}")
     _line(lines, level, "}")
+
+
+def _render_local_material_wrappers(lines: list[str], spec: BuildingSpec) -> bool:
+    used_materials = {model.material.value for model in spec._all_models()}
+    wrappers = tuple(
+        (material, name, mask_depth)
+        for material, name, mask_depth in _LOCAL_MATERIAL_RENDER_WRAPPERS
+        if material.value in used_materials
+    )
+    if not wrappers:
+        return False
+
+    _line(lines, 0, "Group:")
+    _line(lines, 0, "{")
+    _line(lines, 1, 'Name:"Asset"')
+    for material, name, mask_depth in wrappers:
+        _line(lines, 1)
+        _line(lines, 1, "Render/Full:")
+        _line(lines, 1, "{")
+        _line(lines, 2, f'Name:"{name}"')
+        if mask_depth is not None:
+            _line(lines, 2, f'MaskDepth:"{mask_depth}"')
+        _line(lines, 2, f"Material:\"'{material.value}'\"")
+        _line(lines, 1, "}")
+    _line(lines, 0, "}")
+    return True
 
 
 def _render_proxy(
@@ -1063,6 +1120,8 @@ def _render_proxy(
     name: str,
     models: tuple[BuildingModel, ...],
     instancer_reference: str,
+    *,
+    spec: BuildingSpec,
 ) -> None:
     _line(lines, level, "Instancer/Proxy:")
     _line(lines, level, "{")
@@ -1076,7 +1135,8 @@ def _render_proxy(
         _line(lines, level + 2, 'Position:"0,0,0"')
         _line(lines, level + 2, f'ZLayer:"{model.z_layer}"')
         _line(lines, level + 2, 'Mesh:"./Mesh"')
-        _line(lines, level + 2, f'Render:"{model.material.value}"')
+        render_reference = _model_render_reference(spec, model)
+        _line(lines, level + 2, f'Render:"{render_reference}"')
         _line(lines, level + 2, 'Shadow:"true,true,false"')
         _line(lines, level + 2, 'ShadowBias:"0"')
         _line(lines, level + 2, 'ScreenIdMode:"Instance"')
@@ -1099,6 +1159,13 @@ def _render_proxy(
         _line(lines, level + 2, "}")
         _line(lines, level + 1, "}")
     _line(lines, level, "}")
+
+
+def _model_render_reference(spec: BuildingSpec, model: BuildingModel) -> str:
+    for material, name, _mask_depth in _LOCAL_MATERIAL_RENDER_WRAPPERS:
+        if model.material == material:
+            return f"/Ancient/Entity/Local/Building/List/{spec.identifier}/Asset/{name}"
+    return model.material.value
 
 
 def _line(lines: list[str], level: int, value: str = "") -> None:
@@ -1269,9 +1336,12 @@ def _validate_tga_asset(
 def _reference_has_base_anchor(base_root: Path, reference: EngineReference) -> bool:
     if reference.value.startswith("/System/"):
         return True
-    if not reference.value.startswith("~/"):
+    if reference.value.startswith("/Ancient/"):
+        parts = reference.value[len("/Ancient/") :].split("/")
+    elif reference.value.startswith("~/"):
+        parts = reference.value[2:].split("/")
+    else:
         return False
-    parts = reference.value[2:].split("/")
     if "List" in parts:
         index = parts.index("List")
         if index + 1 >= len(parts):
@@ -1333,7 +1403,7 @@ def _casefold_child(parent: Path, name: str) -> Path | None:
 def _validate_external_reference(reference: EngineReference, *, label: str) -> None:
     if not isinstance(reference, EngineReference):
         raise ContractError(f"{label} must be an EngineReference")
-    if not reference.value.startswith(("~/", "/System/")):
+    if not reference.value.startswith(("~/", "/Ancient/", "/System/")):
         raise ContractError(f"{label} must target an external engine node, not a relative node")
     if any(character in reference.value for character in ('"', "'", "\r", "\n", "\\")):
         raise ContractError(f"{label} contains ART-unsafe characters")

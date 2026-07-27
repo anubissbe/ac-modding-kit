@@ -13,12 +13,16 @@ editors and integrations do not need a source checkout.
 - `acmk-runtime-test-v1.schema.json` validates sanitized manual runtime-test evidence.
 - `acmk-runtime-test-v2.schema.json` adds a versioned, warning-only clean-launch baseline
   differential. Existing occurrence-counted v2 evidence remains supported; new records use
-  repeat-insensitive normalized warning-signature membership.
+  repeat-insensitive normalized warning-signature membership. Warning-signature v2 also
+  normalizes only exact terminal 14-digit Ancient Cities `User/Save` cleanup ids while retaining
+  the surrounding path and case.
 - `acmk-runtime-test-v3.schema.json` binds evidence to the explicitly selected tested loose-mod
   root and records manual save/reload persistence. Its fingerprint covers only `Index.art`,
   `Thumbnail.jpg`, and `Ancient/**`; the sole excluded game-managed file is an empty root
   `Mod.hms`. A warning baseline is optional in v3 and may represent the same enabled candidate
   set before save/reload; it can suppress warning signatures only, never errors or failures.
+  Both prior warning-baseline v1 algorithms remain accepted for existing records; newly recorded
+  baselines use `normalized-warning-signature-set-v2`.
 - `acmk-workshop-state-v1.schema.json` validates persistent app `667610` identity, visibility,
   bounded immutable predecessor IDs, and the last verified timestamp used by the dry-run-first
   post-publication synchronization workflow.

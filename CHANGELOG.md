@@ -16,6 +16,8 @@ practical.
 - Evidence-backed `observed-consensus` reconciliation for the audited Ancient Cities
   1.9.3 / Steam build 23915225 / GameVersion 22 Generic root layout, without copying or
   mislabelling Workshop content.
+- Exact-build Generic observed-consensus support for Ancient Cities 1.9.5 / Steam build
+  24378812 / GameVersion 22 with its pinned content fingerprint.
 - Separate runtime source, authoring asset, local state, and Workshop staging paths.
 - Authoring and release validation profiles with compatibility, provenance, contact,
   runtime-test, and authoring-file checks.
@@ -23,9 +25,13 @@ practical.
   deterministic runtime-source fingerprint.
 - Optional pre-candidate warning baselines for `project record-test`; exact recurring base
   warnings may be discounted while new warnings and all errors remain release blockers.
+- Versioned warning-signature-set v2 normalization for Ancient Cities' exact terminal 14-digit
+  disposable `User/Save` cleanup ids, with prior warning algorithms retained for compatibility.
 - Dry-run-first, backed-up project configuration updates and provenance review metadata.
 - Atomic, deterministic Workshop staging without game deployment or Steam publication.
 - Offline typed knowledge-base reading and deterministic search.
+- Audited 1.9.3 balance-field and engine-boundary reference covering nutrition, spoilage,
+  ecology, crops, production, maintenance, workgroups, AI, events, UI, and runtime evidence.
 - Offline Workshop Publish/Update recovery guidance with dated Error 15, Error 2, Steam Cloud
   quota, preview, connection, and PublishedFileId evidence.
 - Dated Error 9 wrong-account/deleted-item recovery evidence, immutable predecessor/sibling

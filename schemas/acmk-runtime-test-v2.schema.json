@@ -46,7 +46,8 @@
         "algorithm": {
           "enum": [
             "normalized-warning-line-multiset-v1",
-            "normalized-warning-signature-set-v1"
+            "normalized-warning-signature-set-v1",
+            "normalized-warning-signature-set-v2"
           ]
         },
         "log_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},

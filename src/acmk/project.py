@@ -41,9 +41,14 @@ _LEGACY_RUNTIME_TEST_SCHEMA_VERSIONS = frozenset({_RUNTIME_TEST_SCHEMA_V1, _RUNT
 _LEGACY_SOURCE_FINGERPRINT_ALGORITHM = "sha256-tree-v1"
 _LOOSE_MOD_FINGERPRINT_ALGORITHM = "sha256-loose-mod-v1"
 _LEGACY_WARNING_BASELINE_ALGORITHM = "normalized-warning-line-multiset-v1"
-_WARNING_BASELINE_ALGORITHM = "normalized-warning-signature-set-v1"
+_WARNING_BASELINE_ALGORITHM_V1 = "normalized-warning-signature-set-v1"
+_WARNING_BASELINE_ALGORITHM = "normalized-warning-signature-set-v2"
 _SUPPORTED_WARNING_BASELINE_ALGORITHMS = frozenset(
-    {_LEGACY_WARNING_BASELINE_ALGORITHM, _WARNING_BASELINE_ALGORITHM}
+    {
+        _LEGACY_WARNING_BASELINE_ALGORITHM,
+        _WARNING_BASELINE_ALGORITHM_V1,
+        _WARNING_BASELINE_ALGORITHM,
+    }
 )
 _OBSERVED_CONSENSUS_IMPORT_SCHEMA_VERSION = 2
 _STAGED_ROOT_ARTIFACT_NAMES = ("Index.art", "Thumbnail.jpg", "Mod.zip")
@@ -54,6 +59,12 @@ _OBSERVED_CONSENSUS_PROFILES = {
         "23915225",
         "D9BF481D195671BF9CB98274B4CFF604",
     ): "generic-gv22-b23915225-v1",
+    (
+        "22",
+        "1.9.5",
+        "24378812",
+        "DA70D6E3E9DCBE7F739E46393301CC4D",
+    ): "generic-gv22-b24378812-v1",
 }
 
 
@@ -2714,6 +2725,12 @@ def _normalised_warning_lines(text: str) -> Iterable[str]:
         normalized = re.sub(
             r"^(Warning - )\[\d+\](?=\s)",
             r"\1[#]",
+            normalized,
+            count=1,
+        )
+        normalized = re.sub(
+            r"^(Warning - \(DD\) _wrmdir: [^\r\n]+[\\/]User[\\/]Save[\\/])[0-9]{14}$",
+            r"\1<save-id>",
             normalized,
             count=1,
         )

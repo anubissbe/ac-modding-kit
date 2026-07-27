@@ -129,6 +129,9 @@ editor and type-checker support.
 
 Read the [SDK guide](docs/sdk.md), [first safe mod tutorial](docs/tutorials/first-safe-mod.md),
 [standalone building guide](docs/standalone-buildings.md),
+[balance and engine boundaries](skills/ancient-cities-modding/references/balance-and-engine-boundaries.md),
+[content authoring patterns](skills/ancient-cities-modding/references/content-patterns.md),
+[isolated runtime test template](skills/ancient-cities-modding/references/isolated-runtime-test.md),
 [support matrix](docs/reference/support-matrix.md), and
 [compatibility policy](docs/compatibility-policy.md). Maintainers also have a
 [release checklist](docs/releasing.md).
@@ -176,6 +179,10 @@ This rewrites only the root manifest to the audited Generic layout, records sani
 `.acmk/import.json` evidence, labels the project `observed-consensus` rather than falsely
 claiming `game-generated`, and resets runtime status to `untested`. Unsupported builds and
 missing or altered evidence remain release blockers.
+
+Audited Generic observed-consensus profiles currently cover exact Ancient Cities builds
+1.9.3 / Steam build 23915225 and 1.9.5 / Steam build 24378812, both with internal
+`GameVersion` 22 and their pinned content hashes. No nearby or future build is implied.
 
 The evidence hash is bound to the current root manifest. After an intentional canonical
 Description, Changelog, Content, or Steam ID update, run the same preview/apply pair again.
