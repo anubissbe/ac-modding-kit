@@ -136,4 +136,6 @@ clearing trees or vegetation before construction tasks appear. Raise the site's 
 when appropriate and observe its task count. Compare the same terrain and worker context with a
 built-in building before attributing a shared clearing delay to custom ART. Catalogue presence,
 placement, terrain clearing, construction, completed visuals, function, decay, and persistence
-are separate claims.
+are separate claims. In the observed 1.9.5 case, the custom Hellenic house completed after the
+site and Builders were prioritized, Woodchoppers were active, and a competing Gatherers group
+was temporarily paused; restore any group and speed changes after the diagnostic run.

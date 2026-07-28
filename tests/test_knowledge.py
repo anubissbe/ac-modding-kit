@@ -89,6 +89,7 @@ class BundledKnowledgeTests(unittest.TestCase):
         self.assertIn("exact-255 plateau", document.text)
         self.assertIn("local map loads", document.text)
         self.assertIn("clearing trees or vegetation", document.text)
+        self.assertIn("competing Gatherers group", document.text)
 
         culture_hits = knowledge.search("research layers", topic="content-patterns")
         fish_hits = knowledge.search("passive net", topic="content-patterns")
