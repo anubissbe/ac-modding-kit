@@ -101,6 +101,29 @@ fishing activity, inspect the worker's equipped tool, and confirm that fish inve
 Record separately whether crafting, equipping, activity, production, and save/reload persistence
 passed; do not infer one result from another.
 
+## Fail-closed evidence sessions and mod-list capture
+
+Treat the enabled-mod UI as an active control, not a passive details view. On Ancient Cities
+1.9.5, clicking the body of a row in **Mods > List** toggled that mod even when the pointer was
+outside its checkbox. To capture an isolation screenshot, open the list, scroll from inside the
+list, and take the screenshot without clicking a row or checkbox.
+
+Bind every evidence run to the pre-launch configuration hash, candidate hash, and exact game
+fingerprint. If an unintended toggle occurs:
+
+1. stop using that process session for runtime evidence;
+2. return the checkbox to its intended state only to recover the user's configuration;
+3. exit Ancient Cities normally and verify the configuration byte-for-byte against the frozen
+   pre-launch hash; and
+4. start a completely new process before recapturing both screenshots and log phases.
+
+Turning the checkbox back off can restore the exact configuration bytes, but it cannot remove the
+enable/disable event from the current `Log.txt`. Therefore do not combine a pre-toggle screenshot
+with a post-toggle log or present that session as a clean isolated launch. If any frozen binding
+changed, abandon the evidence run, restore the exact backed-up configuration while the game is
+closed, and initialize a new run. Never edit an immutable run's bindings after observations have
+started.
+
 ## Isolated runtime test
 
 Use the reusable [isolated runtime test record](isolated-runtime-test.md)

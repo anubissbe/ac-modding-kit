@@ -59,6 +59,9 @@ practical.
   built-in comparison sites.
 - Save/reload persistence evidence now requires reselecting the exact tested entity and comparing
   its identity, completed state, constitution, and material totals after a full process restart.
+- Fail-closed enabled-mod evidence guidance after Ancient Cities 1.9.5 showed that clicking a
+  Mods-list row can toggle its checkbox: a restored configuration hash does not sanitize the
+  current log, and changed frozen bindings require a newly initialized evidence run.
 
 ### Changed
 
