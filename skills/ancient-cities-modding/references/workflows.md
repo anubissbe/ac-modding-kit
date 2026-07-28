@@ -145,6 +145,20 @@ can evict its residents; on a building site it cancels the site. Navigate with t
 chevron or a harmless selection change. If the destructive control is activated during evidence
 collection, reload the frozen reference save and discard every observation made after the click.
 
+For repeatable local-map observation, select the tribe through the flag at the top of the HUD and
+press `F` to focus the selected tribe. This returned the camera to the settlement in Ancient Cities
+1.9.5 without activating an entity-panel action. Treat `Home`/`End` only as selection-history
+controls: they can also move the camera to a previously selected remote entity. The magnifier in
+the tribe panel can switch to a global/map-focused view; use the documented `Tab`/globe control to
+return to the local map. Verify population in the tribe's People tab rather than inferring it from
+the small number beside the year, which is the current day in the observed HUD.
+
+When ordinary AI scheduling makes a construction observation too slow, acceleration must remain
+bounded and disclosed. Use at most a short ultra-fast burst, pause immediately, refresh the UI,
+and recheck population, food, tools, tasks, and the selected site before continuing. Never treat
+accelerated time as evidence for normal stage duration or cost, and never leave ultra-fast time
+running unattended.
+
 ## Conflict diagnosis
 
 1. Capture enabled order and intersect effective payload paths.

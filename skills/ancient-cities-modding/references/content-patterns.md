@@ -133,6 +133,18 @@ input. If demolition or cancellation was triggered in a disposable runtime world
 discard the changed world state, and reload the frozen pre-action save. Never claim later
 construction, production, population, or persistence evidence from the contaminated continuation.
 
+To recover a stable local view without touching a destructive panel control, select the tribe flag
+in the top HUD and press `F`. In the observed 1.9.5 client this focused the settlement. Do not use
+`Home`/`End` as camera controls: they traverse selection history and can relocate the camera to a
+remote prior selection. The tribe-panel magnifier can open a global/map-focused view; return with
+the documented local/global control. Read the tribe People tab for the population total. The small
+number adjacent to the year in the observed HUD is the day, not the tribe population.
+
+If runtime progress is accelerated, keep every ultra-fast interval short, pause immediately after
+the interval, and capture the resulting tasks, tools, resources, population, and food state. Such
+an interval can prove that the ordinary scheduler advanced a task, but it cannot prove normal
+duration, stage timing, costs, or unattended stability.
+
 ## Isolated runtime test
 
 Use the reusable [isolated runtime test record](isolated-runtime-test.md)
