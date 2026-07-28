@@ -187,3 +187,9 @@ persistence check used an explicit manual save, a full process exit, a clean res
 exact-entity reinspection after reload. The reloaded panel preserved the custom name, completed
 state, constitution, and material totals. Treat that as proof for the tested instance only, not
 for the rest of a building catalogue.
+
+Placement itself can also have more than one interaction contract. The observed fixed-footprint
+house accepted one left click, whereas an orientation-sensitive yard kept moving its green
+preview after loose clicks and created the real site only after a short left drag set its facing.
+Record which gesture the tested building required and confirm success from a toast or selectable
+site. Do not count a green preview as a placed building.
