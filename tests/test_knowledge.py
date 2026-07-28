@@ -90,13 +90,18 @@ class BundledKnowledgeTests(unittest.TestCase):
         self.assertIn("local map loads", document.text)
         self.assertIn("clearing trees or vegetation", document.text)
         self.assertIn("competing Gatherers group", document.text)
+        self.assertIn("clicking the body of a row", document.text)
+        self.assertIn("it cannot remove the", document.text)
+        self.assertIn("Never edit an immutable run's bindings", document.text)
 
         culture_hits = knowledge.search("research layers", topic="content-patterns")
         fish_hits = knowledge.search("passive net", topic="content-patterns")
         runtime_hits = knowledge.search("isolated runtime test", topic="content-patterns")
+        contamination_hits = knowledge.search("frozen binding", topic="content-patterns")
         self.assertTrue(culture_hits)
         self.assertTrue(fish_hits)
         self.assertTrue(runtime_hits)
+        self.assertTrue(contamination_hits)
 
         template = knowledge.read("isolated-runtime-test")
         self.assertIn("Pre-test configuration SHA-256", template.text)

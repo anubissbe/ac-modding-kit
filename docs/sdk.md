@@ -293,7 +293,10 @@ CLI equivalents are `acmk knowledge list`, `read`, and `search`.
 The current `content-patterns` and `workflows` topics include the observed
 Ancient Cities 1.9.5 exact-255 culture-core requirement, the separate global
 and local new-game start checkpoints, and the terrain-clearing/site-priority
-diagnosis for apparently stalled custom buildings.
+diagnosis for apparently stalled custom buildings. They also document the
+fail-closed enabled-mod evidence sequence: a mod-list row click can toggle its
+checkbox, restoring the configuration bytes does not clean the current log,
+and changed frozen bindings require a new evidence run.
 
 ## Compatibility promise
 

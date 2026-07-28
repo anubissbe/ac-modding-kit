@@ -125,6 +125,14 @@ Use the feature-specific matrix in [content-patterns.md](content-patterns.md) an
 explicit manual save, full exit, clean restart, reload, repeated essential behavior, log review,
 and exact restoration of the previous configuration.
 
+When recording the enabled-mod isolation state, treat **Mods > List** rows as toggle controls.
+Scroll without clicking rows, then capture the intended checkbox state. If a wrong mod is toggled,
+discard that process session's screenshots and logs even when toggling it back restores the exact
+configuration bytes. Exit normally, verify the frozen configuration hash, and relaunch before
+recording evidence. Abandon and reinitialize the evidence run when any frozen binding changed;
+never rewrite the run metadata to fit the changed state. See
+[content-patterns.md](content-patterns.md) for the fail-closed sequence.
+
 During building tests, use one left click to confirm placement. Select the resulting site and
 separate terrain-clearing tasks from construction tasks. If a custom site stalls, raise the
 site's own priority and compare a built-in building placed in the same world before editing the
