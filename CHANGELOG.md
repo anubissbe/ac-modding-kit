@@ -52,6 +52,11 @@ practical.
 - Per-asset rights, provenance, compatibility, output, and runtime-test metadata.
 - Static model-asset integrity tests, Blender/FBX semantic validation, and a path-filtered
   GitHub workflow using a checksum-pinned official Blender archive.
+- Runtime-authored culture guidance requiring exact-255 playable cores after Ancient Cities
+  1.9.5 showed that a sub-255 map glow can contain no selectable start region.
+- Separate global culture-region and local settlement-start checkpoints, plus a building-site
+  diagnosis workflow covering terrain clearing, site priority, workers, tools, workgroups, and
+  built-in comparison sites.
 
 ### Changed
 
