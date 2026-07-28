@@ -133,11 +133,16 @@ recording evidence. Abandon and reinitialize the evidence run when any frozen bi
 never rewrite the run metadata to fit the changed state. See
 [content-patterns.md](content-patterns.md) for the fail-closed sequence.
 
-During building tests, use one left click to confirm placement. Select the resulting site and
-separate terrain-clearing tasks from construction tasks. If a custom site stalls, raise the
-site's own priority and compare a built-in building placed in the same world before editing the
-mod. Record worker/tool availability and any paused workgroup; a shared built-in/custom stall is
-runtime-context evidence, not a custom-building defect.
+Do not assume that every building uses the same confirmation gesture. A fixed-footprint building
+may use one left click, while an orientation-sensitive building can keep moving a green preview
+after loose clicks and require a short left drag from the placement point toward the desired
+facing. Require a placement toast or a selectable building site before treating the site as
+created; a visible preview alone is insufficient. Record the exact gesture used and remember that
+right click cancels placement. Then select the resulting site and separate terrain-clearing tasks
+from construction tasks. If a custom site stalls, raise the site's own priority and compare a
+built-in building placed in the same world before editing the mod. Record worker/tool
+availability and any paused workgroup; a shared built-in/custom stall is runtime-context
+evidence, not a custom-building defect.
 
 Do not treat the bottom-right red `X` in an entity panel as a close button. In Ancient Cities
 1.9.5 it is a destructive control: on a completed dwelling it schedules/removes the building and

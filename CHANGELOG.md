@@ -21,6 +21,9 @@ practical.
 - Ancient Cities 1.9.5 runtime-navigation guidance covering safe tribe focus with `F`,
   selection-history camera movement, the tribe-panel global view, authoritative population
   inspection, and bounded/disclosed ultra-fast observation bursts.
+- Ancient Cities 1.9.5 directional-placement guidance distinguishing a fixed-footprint click from
+  the short left-drag gesture observed for an orientation-sensitive yard, with toast/site
+  confirmation required instead of trusting a green preview.
 - Separate runtime source, authoring asset, local state, and Workshop staging paths.
 - Authoring and release validation profiles with compatibility, provenance, contact,
   runtime-test, and authoring-file checks.
