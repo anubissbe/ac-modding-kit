@@ -139,6 +139,12 @@ site's own priority and compare a built-in building placed in the same world bef
 mod. Record worker/tool availability and any paused workgroup; a shared built-in/custom stall is
 runtime-context evidence, not a custom-building defect.
 
+Do not treat the bottom-right red `X` in an entity panel as a close button. In Ancient Cities
+1.9.5 it is a destructive control: on a completed dwelling it schedules/removes the building and
+can evict its residents; on a building site it cancels the site. Navigate with the top-left back
+chevron or a harmless selection change. If the destructive control is activated during evidence
+collection, reload the frozen reference save and discard every observation made after the click.
+
 ## Conflict diagnosis
 
 1. Capture enabled order and intersect effective payload paths.

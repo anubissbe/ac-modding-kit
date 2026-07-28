@@ -124,6 +124,15 @@ changed, abandon the evidence run, restore the exact backed-up configuration whi
 closed, and initialize a new run. Never edit an immutable run's bindings after observations have
 started.
 
+Treat an opened entity panel as another active control surface. In Ancient Cities 1.9.5 the
+bottom-right red `X` on a completed housing entity starts demolition instead of closing the panel;
+it can remove the dwelling and make its residents leave the tribe. On a building site, the
+equivalent red `X` cancels the site. Do not use either icon for navigation. Use the panel's
+top-left back chevron or a harmless selection change, and refresh the observation before the next
+input. If demolition or cancellation was triggered in a disposable runtime world, stop recording,
+discard the changed world state, and reload the frozen pre-action save. Never claim later
+construction, production, population, or persistence evidence from the contaminated continuation.
+
 ## Isolated runtime test
 
 Use the reusable [isolated runtime test record](isolated-runtime-test.md)
