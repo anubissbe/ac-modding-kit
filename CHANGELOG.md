@@ -18,6 +18,9 @@ practical.
   mislabelling Workshop content.
 - Exact-build Generic observed-consensus support for Ancient Cities 1.9.5 / Steam build
   24378812 / GameVersion 22 with its pinned content fingerprint.
+- Ancient Cities 1.9.5 runtime-navigation guidance covering safe tribe focus with `F`,
+  selection-history camera movement, the tribe-panel global view, authoritative population
+  inspection, and bounded/disclosed ultra-fast observation bursts.
 - Separate runtime source, authoring asset, local state, and Workshop staging paths.
 - Authoring and release validation profiles with compatibility, provenance, contact,
   runtime-test, and authoring-file checks.
