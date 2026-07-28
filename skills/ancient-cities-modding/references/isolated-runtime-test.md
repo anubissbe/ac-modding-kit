@@ -91,6 +91,9 @@ catalogue visibility or a clean load line alone.
   counters were recorded.
 - [ ] Exact recipe inputs decreased and one isolated output increased before function was marked
   passed.
+- [ ] “Exact” means one completed batch whose isolated before/after quantities equal the declared
+  full-batch input vector and expected output count. Partial batches or items touched by a
+  concurrent producer/consumer remain unverified.
 
 ### Generic Fish-tool extension
 
