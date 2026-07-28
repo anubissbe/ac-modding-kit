@@ -296,7 +296,10 @@ and local new-game start checkpoints, and the terrain-clearing/site-priority
 diagnosis for apparently stalled custom buildings. They also document the
 fail-closed enabled-mod evidence sequence: a mod-list row click can toggle its
 checkbox, restoring the configuration bytes does not clean the current log,
-and changed frozen bindings require a new evidence run.
+and changed frozen bindings require a new evidence run. Entity detail panels
+are active control surfaces too: the bottom-right red `X` is demolition or
+site cancellation, not close. An accidental activation requires reloading the
+frozen reference save and discarding all later observations from that world.
 
 ## Compatibility promise
 

@@ -62,6 +62,9 @@ practical.
 - Fail-closed enabled-mod evidence guidance after Ancient Cities 1.9.5 showed that clicking a
   Mods-list row can toggle its checkbox: a restored configuration hash does not sanitize the
   current log, and changed frozen bindings require a newly initialized evidence run.
+- Destructive entity-panel guidance after Ancient Cities 1.9.5 showed that the bottom-right red
+  `X` demolishes completed housing or cancels a building site rather than closing the panel;
+  contaminated world-state evidence must be discarded and the frozen reference save reloaded.
 
 ### Changed
 
