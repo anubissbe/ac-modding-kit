@@ -268,6 +268,14 @@ current group-count scalar was found.
 Do not increase `JobLimit` as a generic AI fix. A larger queue can worsen
 overtasking and does not change how jobs are scored or assigned.
 
+Ancient Cities 1.9.5 exposes completed-building routing, displayed positions,
+actual members, and production as separate runtime states. The authoritative
+**Assign** workflow, reversible staffing diagnostic, and recipe-proof boundary
+are centralized in
+[content-patterns.md](content-patterns.md#completed-production-buildings-and-workgroup-staffing).
+The engine-boundary consequence is that none of these UI states provides a
+configurable per-person assignment rule or guarantees immediate staffing.
+
 `Entity/Behavior/*/Index.art` mostly declares behavior types and enabled
 state. `Entity/Task/*/Index.art` mostly declares task types, UI grouping,
 icons, and order registration. The current data contains no configurable

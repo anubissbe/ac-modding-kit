@@ -24,6 +24,9 @@ practical.
 - Ancient Cities 1.9.5 directional-placement guidance distinguishing a fixed-footprint click from
   the short left-drag gesture observed for an orientation-sensitive yard, with toast/site
   confirmation required instead of trusting a green preview.
+- Ancient Cities 1.9.5 production-workgroup guidance separating completed-building assignment,
+  displayed positions, actual members, worker activity, and exact recipe accounting; includes the
+  observed **Assign** workflow and reversible competing-group pause diagnostic.
 - Separate runtime source, authoring asset, local state, and Workshop staging paths.
 - Authoring and release validation profiles with compatibility, provenance, contact,
   runtime-test, and authoring-file checks.
