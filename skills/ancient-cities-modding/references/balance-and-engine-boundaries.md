@@ -268,6 +268,25 @@ current group-count scalar was found.
 Do not increase `JobLimit` as a generic AI fix. A larger queue can worsen
 overtasking and does not change how jobs are scored or assigned.
 
+Ancient Cities 1.9.5 exposes two separate runtime assignments that must not be
+collapsed into one claim:
+
+1. To route a completed building, open the destination workgroup, select the
+   circular-arrow **Assign** action, click the real map entity, and confirm the
+   building tab's count and thumbnails. Right click exits assignment mode.
+2. The workgroup member display and its position slider govern staffing. A
+   display such as `0/6` means no current member was present for the six
+   displayed positions even when the building tab already showed
+   `Production 2`. Suitable residents join during ordinary work scheduling;
+   building assignment does not force or prove that join.
+
+The reversible pause control on another group can release its current member
+for a staffing diagnostic, but it does not guarantee immediate reassignment.
+Record the before/after member counters, restore the paused group, and require
+an observed worker plus exact recipe inventory changes before claiming that a
+production building functions. The bottom-right red `X` is destructive and is
+never an assignment or navigation control.
+
 `Entity/Behavior/*/Index.art` mostly declares behavior types and enabled
 state. `Entity/Task/*/Index.art` mostly declares task types, UI grouping,
 icons, and order registration. The current data contains no configurable

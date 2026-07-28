@@ -145,6 +145,31 @@ the interval, and capture the resulting tasks, tools, resources, population, and
 an interval can prove that the ordinary scheduler advanced a task, but it cannot prove normal
 duration, stage timing, costs, or unattended stability.
 
+## Completed production buildings and workgroup staffing
+
+Treat building routing and resident staffing as separate runtime checkpoints. In the observed
+Ancient Cities 1.9.5 client, the reliable routing workflow was:
+
+1. open the intended destination workgroup;
+2. select its circular-arrow **Assign** action;
+3. click the completed production building on the map;
+4. confirm that the workgroup building tab changes its count and shows the intended building
+   thumbnail; and
+5. right click to leave assignment mode.
+
+The observed Craftsmen tab showed `Production 2` after two completed Greek yards were routed, but
+its member display remained `0/6` and the member tab remained empty. Therefore `Production 2`
+proves only that two buildings are assigned to that workgroup. It does not prove an open position
+was filled, a resident reached the building, a recipe ran, or an output was created.
+
+The position control opens or closes workgroup positions; suitable residents take them through
+ordinary scheduling during work time. A reversible pause on a competing group may release a
+resident, but it is a diagnostic aid rather than a forced transfer and may not populate the
+destination immediately. Record current members separately from displayed positions, restore
+temporary group changes, and stop bounded acceleration when food or population safety becomes
+questionable. Production passes only after an actual member performs Load/Process/Unload and exact
+before/after inventory proves both the declared input decreases and an isolated output increase.
+
 ## Isolated runtime test
 
 Use the reusable [isolated runtime test record](isolated-runtime-test.md)

@@ -78,6 +78,20 @@ catalogue visibility or a clean load line alone.
 - [ ] After reload, the same instance still has the expected name, completion/constitution state,
   and material totals; no catalogue-wide persistence claim is inferred from one instance.
 
+### Production-workgroup routing
+
+- [ ] The completed map entity was assigned through the destination workgroup's **Assign** action.
+- [ ] The workgroup building tab changed to the expected count and showed the intended thumbnail.
+- [ ] Right click exited assignment mode without changing the assignment.
+- [ ] Building count, open positions, current members, and active worker behavior were recorded as
+  separate observations.
+- [ ] A nonzero current-member count and the worker's Load/Process/Unload behavior were observed;
+  `Production <n>` or an open vacancy alone was not treated as production proof.
+- [ ] Any competing workgroup paused for diagnosis was restored, and the before/after member
+  counters were recorded.
+- [ ] Exact recipe inputs decreased and one isolated output increased before function was marked
+  passed.
+
 ### Generic Fish-tool extension
 
 - [ ] Recipe visible and resource inputs consumed.
