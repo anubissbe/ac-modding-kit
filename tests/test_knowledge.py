@@ -86,6 +86,10 @@ class BundledKnowledgeTests(unittest.TestCase):
         self.assertIn("/Building/List/<EntityId>/Asset/<RenderName>", document.text)
         self.assertIn("reusable hand-held tool", document.text)
         self.assertIn("fully exit, restart from a clean launch, reload", document.text)
+        self.assertIn("exact-255 plateau", document.text)
+        self.assertIn("local map loads", document.text)
+        self.assertIn("clearing trees or vegetation", document.text)
+        self.assertIn("competing Gatherers group", document.text)
 
         culture_hits = knowledge.search("research layers", topic="content-patterns")
         fish_hits = knowledge.search("passive net", topic="content-patterns")
@@ -99,6 +103,8 @@ class BundledKnowledgeTests(unittest.TestCase):
         self.assertIn("Culture timeline extension", template.text)
         self.assertIn("Generic Fish-tool extension", template.text)
         self.assertIn("does not authorize Workshop Publish or Update", template.text)
+        self.assertIn("sub-255 glow", template.text)
+        self.assertIn("Building-site diagnosis", template.text)
 
     def test_workshop_publish_recovery_is_available_offline(self) -> None:
         error_15 = knowledge.search("Error 15", topic="workflows")

@@ -64,9 +64,11 @@ remain unverified on the audited build.
 Treat archaeological or regional research layers as authoring inputs, not runtime Culture IDs.
 Compile them into current, proven engine Culture entities. Validate every consecutive frame so
 combined playable availability never retreats and each predecessor-to-successor handoff is
-gap-free. Then inspect representative early, transition, and late start maps in an isolated
-runtime test. See [content-patterns.md](content-patterns.md) for the mask invariant and test
-matrix.
+gap-free. Require a reliable exact-255 core in every playable frame; a sub-255 glow can be
+visible while no game region is selectable. Then inspect representative early, transition, and
+late start maps in an isolated runtime test. Select both the global culture region and the local
+settlement start point before recording a successful start. See
+[content-patterns.md](content-patterns.md) for the mask invariant and test matrix.
 
 ## Generic activity tools
 
@@ -122,6 +124,12 @@ Use the feature-specific matrix in [content-patterns.md](content-patterns.md) an
 [isolated runtime test record](isolated-runtime-test.md). A complete isolated pass includes an
 explicit manual save, full exit, clean restart, reload, repeated essential behavior, log review,
 and exact restoration of the previous configuration.
+
+During building tests, use one left click to confirm placement. Select the resulting site and
+separate terrain-clearing tasks from construction tasks. If a custom site stalls, raise the
+site's own priority and compare a built-in building placed in the same world before editing the
+mod. Record worker/tool availability and any paused workgroup; a shared built-in/custom stall is
+runtime-context evidence, not a custom-building defect.
 
 ## Conflict diagnosis
 

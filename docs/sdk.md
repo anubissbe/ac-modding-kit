@@ -290,6 +290,10 @@ for hit in search_knowledge("UTF-16LE"):
 ```
 
 CLI equivalents are `acmk knowledge list`, `read`, and `search`.
+The current `content-patterns` and `workflows` topics include the observed
+Ancient Cities 1.9.5 exact-255 culture-core requirement, the separate global
+and local new-game start checkpoints, and the terrain-clearing/site-priority
+diagnosis for apparently stalled custom buildings.
 
 ## Compatibility promise
 

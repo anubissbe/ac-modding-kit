@@ -29,6 +29,9 @@ every handoff frame. This lets cultures evolve without making previously availab
 Recommended generator checks are:
 
 - exact current-exemplar dimensions, orientation, image format, filenames, and ART ordering;
+- a reliable exact-255 plateau in every playable dated frame, not merely a bright
+  feathered glow; Ancient Cities 1.9.5 was observed rendering a 252-valued glow while
+  rejecting every start region inside it;
 - an explicit, source-documented first frame rather than an invented full-map start;
 - a declared final authored envelope and the frame by which it must be reached;
 - bytewise non-retreat of combined availability through every consecutive frame;
@@ -36,9 +39,15 @@ Recommended generator checks are:
 - no use of research-layer identifiers as engine Culture references; and
 - review atlases for source layers, each runtime culture, and their combined availability.
 
-These checks prove generator invariants only. Test the actual start-location UI at representative
-early, transition, and late dates because loader interpretation, map projection, and UI filtering
-remain runtime concerns.
+Require at least four exact-255 pixels as a conservative generator guard, then test the actual
+start-location UI at representative early, transition, and late dates. These checks prove
+generator invariants only: loader interpretation, map projection, UI filtering, and whether an
+authored core contains a selectable game-region centre remain runtime concerns.
+
+Treat a new-game culture start as two checkpoints. First select a valid global-map culture
+region. After the local map loads, explicitly choose the settlement start point and wait for
+residents and ordinary settlement controls to appear. Reaching the local map alone is not proof
+that settlement initialization completed.
 
 ## Culture-specific wonders
 
@@ -121,3 +130,16 @@ Feature-specific minimums:
 
 If a required observation cannot be produced, record it as unverified. Do not upgrade a static
 or clean-load result into a functional runtime claim.
+
+For a building that appears stalled, first select its construction site. A valid site may be
+clearing trees or vegetation before construction tasks appear. Raise the site's own priority
+when appropriate and observe its task count. Compare the same terrain and worker context with a
+built-in building before attributing a shared clearing delay to custom ART. Catalogue presence,
+placement, terrain clearing, construction, completed visuals, function, decay, and persistence
+are separate claims. In the observed 1.9.5 case, the custom Hellenic house completed after the
+site and Builders were prioritized, Woodchoppers were active, and a competing Gatherers group
+was temporarily paused; restore any group and speed changes after the diagnostic run. Its
+persistence check used an explicit manual save, a full process exit, a clean restart, and an
+exact-entity reinspection after reload. The reloaded panel preserved the custom name, completed
+state, constitution, and material totals. Treat that as proof for the tested instance only, not
+for the rest of a building catalogue.

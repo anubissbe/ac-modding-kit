@@ -47,15 +47,18 @@ catalogue visibility or a clean load line alone.
 | Manual save created |  |  |
 | Full exit, clean restart, and reload |  |  |
 | Essential behavior repeated after reload |  |  |
+| Exact tested entity reselected after reload; identity and state match |  |  |
 | Relevant log contains no candidate errors/new warnings |  |  |
 
 ### Culture timeline extension
 
+- [ ] Every playable dated mask has a reliable exact-255 core; no sub-255 glow is treated as proof.
 - [ ] Early start frame shows only the intended evidence-backed seed.
 - [ ] Transition frames expand combined availability without holes.
 - [ ] Late frame reaches the declared authored envelope.
 - [ ] Predecessor-to-successor culture handoffs do not remove playable land.
 - [ ] UI shows only runtime culture entities, not authoring/research-layer IDs.
+- [ ] Global culture region and local settlement start point were both selected.
 
 ### Wonder extension
 
@@ -65,6 +68,15 @@ catalogue visibility or a clean load line alone.
 - [ ] Uniqueness/count limit observed.
 - [ ] Two decay states and repair observed.
 - [ ] Footprint, entrance, collision, routing, and optional service slots behave correctly.
+
+### Building-site diagnosis
+
+- [ ] Placement was confirmed once and produced the intended named construction site.
+- [ ] Terrain clearing and construction were recorded as separate states.
+- [ ] Site priority, tools, available workers, and paused workgroups were inspected.
+- [ ] A built-in comparison site was tested in the same runtime context before blaming custom ART.
+- [ ] After reload, the same instance still has the expected name, completion/constitution state,
+  and material totals; no catalogue-wide persistence claim is inferred from one instance.
 
 ### Generic Fish-tool extension
 
