@@ -138,4 +138,8 @@ built-in building before attributing a shared clearing delay to custom ART. Cata
 placement, terrain clearing, construction, completed visuals, function, decay, and persistence
 are separate claims. In the observed 1.9.5 case, the custom Hellenic house completed after the
 site and Builders were prioritized, Woodchoppers were active, and a competing Gatherers group
-was temporarily paused; restore any group and speed changes after the diagnostic run.
+was temporarily paused; restore any group and speed changes after the diagnostic run. Its
+persistence check used an explicit manual save, a full process exit, a clean restart, and an
+exact-entity reinspection after reload. The reloaded panel preserved the custom name, completed
+state, constitution, and material totals. Treat that as proof for the tested instance only, not
+for the rest of a building catalogue.

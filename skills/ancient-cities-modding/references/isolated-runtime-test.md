@@ -47,6 +47,7 @@ catalogue visibility or a clean load line alone.
 | Manual save created |  |  |
 | Full exit, clean restart, and reload |  |  |
 | Essential behavior repeated after reload |  |  |
+| Exact tested entity reselected after reload; identity and state match |  |  |
 | Relevant log contains no candidate errors/new warnings |  |  |
 
 ### Culture timeline extension
@@ -74,6 +75,8 @@ catalogue visibility or a clean load line alone.
 - [ ] Terrain clearing and construction were recorded as separate states.
 - [ ] Site priority, tools, available workers, and paused workgroups were inspected.
 - [ ] A built-in comparison site was tested in the same runtime context before blaming custom ART.
+- [ ] After reload, the same instance still has the expected name, completion/constitution state,
+  and material totals; no catalogue-wide persistence claim is inferred from one instance.
 
 ### Generic Fish-tool extension
 

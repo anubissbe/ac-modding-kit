@@ -57,6 +57,8 @@ practical.
 - Separate global culture-region and local settlement-start checkpoints, plus a building-site
   diagnosis workflow covering terrain clearing, site priority, workers, tools, workgroups, and
   built-in comparison sites.
+- Save/reload persistence evidence now requires reselecting the exact tested entity and comparing
+  its identity, completed state, constitution, and material totals after a full process restart.
 
 ### Changed
 
